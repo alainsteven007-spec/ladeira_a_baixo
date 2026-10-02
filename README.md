@@ -22,10 +22,10 @@ O botão com o nome do personagem, ao lado do seletor de fases, abre a escolha d
 | Trenó | Mais baixo e firme: aguenta 8,5 m/s, mas desliza menos. |
 | Snowboard | Desliza mais, mas aguenta só 7,0 m/s. |
 | Boia | Aguenta 9,5 m/s, mas o ar segura bastante, então corre menos da avalanche. |
-| Esquibunda | Sentado numa tábua, rente ao chão: passa por vãos mais baixos, mas é o mais lento. |
-| Trenó-foguete | Um foguete empurra enquanto ele encosta na neve. É o mais rápido e o mais frágil (6,75 m/s). |
+| Esquibunda | Sentado numa tábua, rente ao chão: passa por vãos mais baixos e aguenta 8,0 m/s, mas é o mais lento. |
+| Trenó-foguete | Um foguete empurra enquanto ele encosta na neve. É o mais rápido e o mais frágil (6,8 m/s). |
 
-Os capacetes mágicos somam resistência a qualquer transporte.
+Os capacetes mágicos somam resistência a qualquer transporte. Todas as 50 fases foram testadas com os seis transportes, em pé e deitado, e todas têm pelo menos uma pista que chega inteira.
 
 ## Fases
 
