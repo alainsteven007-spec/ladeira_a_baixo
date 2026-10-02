@@ -67,6 +67,19 @@ button:hover:not(:disabled){border-color:var(--graphite)}
 button:disabled{opacity:.4;cursor:default}
 button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 button.primary{background:var(--car);border-color:var(--car);color:var(--on-car);font-weight:800;min-width:8rem}
+/* character and vehicle picker: covers the app (and turns with it in sideways mode) */
+.app{position:relative}
+.picker{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:12px;background:rgba(10,20,30,.45)}
+.pk{width:min(100%,40rem);max-height:100%;overflow:auto;display:grid;gap:.6rem;background:var(--paper);border:2px solid var(--graphite);border-radius:10px;padding:1rem 1.1rem 1.1rem;box-shadow:6px 6px 0 var(--graphite)}
+.pk h2{margin:0;font-family:var(--f-hand);font-weight:700;font-size:1.9rem;line-height:1.05;color:var(--ink)}
+.pk h3{margin:.2rem 0 0;font:600 .8rem/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.6rem,1fr));gap:8px}
+.opt{display:grid;gap:4px;justify-items:center;padding:6px 4px 8px;font-weight:600}
+.opt canvas{width:100%;aspect-ratio:4/3;height:auto;box-shadow:none;border-radius:4px;cursor:pointer;background:var(--paper)}
+.opt[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.opt small{font:500 .68rem/1.2 var(--f-mono);color:var(--muted);letter-spacing:.02em;text-align:center}
+.vnote{margin:0;line-height:1.4;min-height:2.8em}
+.pk .btns{justify-content:flex-end}
 /* sideways: board on the left, controls in a column on the right */
 .app.land{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 10rem;grid-template-rows:auto 1fr;gap:8px 12px}
 .app.land .board{grid-column:1;grid-row:1/3}
@@ -75,6 +88,7 @@ button.primary{background:var(--car);border-color:var(--car);color:var(--on-car)
 .app.land h1{font-size:1.45rem}
 .app.land .tag,.app.land .info .more{display:none}
 .app.land .pick{margin-left:0;flex-direction:column}
+.app.land #who{white-space:normal}
 .app.land select{max-width:none}
 .app.land .info{flex:0 0 auto}
 .app.land .controls .btns{flex-direction:column}
@@ -108,6 +122,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
     <div class="brand"><h1>Ladeira Abaixo</h1><span class="tag">esqui sem bastão · só gravidade</span></div>
     <div class="pick">
       <select id="lvlSel" aria-label="Fase"></select>
+      <button id="who" title="Escolher personagem e transporte" aria-haspopup="dialog"></button>
       <button id="turn" title="Trocar entre jogar em pé e deitado">⟳ Deitar</button>
     </div>
   </header>
@@ -121,6 +136,17 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
       </div>
     </div>
   </main>
+  <div class="picker" id="picker" role="dialog" aria-modal="true" aria-labelledby="pkTitle" hidden>
+    <div class="pk">
+      <h2 id="pkTitle">Quem desce, e em quê?</h2>
+      <h3>Personagem</h3>
+      <div class="opts" id="chars"></div>
+      <h3>Transporte</h3>
+      <div class="opts" id="vehs"></div>
+      <p class="vnote" id="vnote"></p>
+      <div class="btns"><button id="pkOk" class="primary">Descer!</button></div>
+    </div>
+  </div>
   <footer class="bar controls">
     <p class="info"><span id="info"></span><span class="more" id="more"></span></p>
     <div class="btns">
@@ -135,7 +161,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
 // World units: 100 px = 1 m, portrait slope. The skier rides on two ski contact points joined by a rigid
 // link (position-based dynamics); the body is drawn on top and only checked for hits.
 let W = 700, H = 1000; const PX = 100, G = 9.81 * PX, R = 9, AXLE = 36, SUB = 10;
-const CRASH_BASE = 750, HELMET_BONUS = 50, VMAX = 2500, GOAL_R = 42, ROLL = 25, DRAG = 0.04, SPIN = 3.5, T_MAX = 40;
+const CRASH_BASE = 750, HELMET_BONUS = 50, VMAX = 2500, GOAL_R = 42, SPIN = 3.5, T_MAX = 40;
 // Levels are authored for the 700×1000 portrait slope; sideways play stretches them to 1000×700.
 // start: launch pad [x1,y1,x2,y2] (skier faces from 1 to 2); goal: [x,y]
 // haz: deadly rects [x,y,w,h] — moving ones add [dx,dy,period s,phase 0..1] and sweep from x,y to x+dx,y+dy and back
@@ -182,7 +208,7 @@ const LEVELS = [
   { name: "Fresta", start: [30,110,150,145], goal: [630,880], haz: [[400,-750,30,1000,0,300,3.2,.625],[400,500,30,1000,0,300,3.2,.625]] },
   { name: "Contramão móvel", start: [670,110,550,145], goal: [80,870], haz: [[0,0,310,520],[380,620,320,380],[315,330,60,40,0,300,1.8,.15],[100,740,60,40,220,0,1.6,.2]] },
   { name: "Vale perigoso", start: [30,110,150,145], goal: [640,740], haz: [[450,280,250,370],[200,840,500,160],[450,660,40,40,0,140,1,.075],[560,660,40,40,0,140,.8,.425],[200,480,50,40,200,0,1.8,.075]] },
-  { name: "Escada rolante", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205],[340,215,30,30,0,330,1.4,.3],[500,445,30,30,0,330,1.2,.6]] },
+  { name: "Escada rolante", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205],[340,215,30,30,0,330,1.4,.35],[500,445,30,30,0,330,1.2,.6]] },
   { name: "Vagonete", start: [30,110,150,145], goal: [640,420], haz: [[400,0,120,360],[0,700,700,300],[300,560,60,40,260,0,2.2,.25],[560,380,40,40,0,200,1.8,.7]] },
   { name: "Grande final", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205],[340,-300,30,500,0,330,1.3,.025],[500,-70,30,500,0,330,1.1,.525],[200,-60,40,40,0,1100,1.7,.9]] },
   // modes: fire vents and fireballs, an avalanche on your tail, eagles and cannons that hunt the skier, then all at once
@@ -234,17 +260,72 @@ function hazAt(h, t = tHaz) {
   const k = (1 - Math.cos(2 * Math.PI * (t / h[6] + h[7]))) / 2;
   return [h[0] + h[4] * k, h[1] + h[5] * k, h[2], h[3]];
 }
-// Skier parts in local coords (x forward, y down from the rear ski contact). Drawn intact, then torn apart on a crash.
-const PARTS = [
-  { a: [-10, 9], b: [50, 9], w: 3, k: "graphite", ski: true },
-  { a: [31, -20], b: [4, 7], w: 1.6, k: "graphite" },
+// Riders: a character (looks only) on a vehicle (changes the ride). Coordinates are local to the rider: x forward,
+// y down from the rear contact; every vehicle rests on the same two contacts, (0,0) and (AXLE,0), with the snow at y = 9.
+// parts are thick strokes from a to b, drawn intact and torn apart on a crash; k picks the colour from the character
+// (jacket, pants, skin) or the vehicle (gear, wood, tube, metal); shape draws a vehicle piece along its a→b segment.
+// probes are (forward, up) body points that must never touch the snow; mid is the body centre (goal, aim, effects).
+// roll: snow friction px/s², drag: air drag 1/s, tough: extra crash speed px/s, thrust: push px/s² while on the snow.
+const SIT = (dx, dy) => [ // seated rider shifted by (dx, dy): sled, rocket, tray
+  { a: [8 + dx, -6 + dy], b: [24 + dx, -9 + dy], w: 5.5, k: "pants", bleed: 1 },
+  { a: [24 + dx, -9 + dy], b: [37 + dx, -2 + dy], w: 5, k: "pants", bleed: 1 },
+  { a: [8 + dx, -6 + dy], b: [11 + dx, -22 + dy], w: 8, k: "jacket", bleed: 1.6 },
+  { a: [11 + dx, -20 + dy], b: [28 + dx, -11 + dy], w: 4.5, k: "jacket", bleed: 1 },
+  { a: [12 + dx, -30 + dy], b: [12 + dx, -30 + dy], w: 11, k: "skin", head: true, bleed: 2 },
+];
+const STAND = [
   { a: [24, -4], b: [18, 6], w: 5, k: "pants", bleed: 1 },
   { a: [15, -14], b: [24, -4], w: 5.5, k: "pants", bleed: 1 },
-  { a: [15, -14], b: [21, -30], w: 8, k: "car", bleed: 1.6 },
-  { a: [21, -28], b: [31, -20], w: 4.5, k: "car", bleed: 1 },
+  { a: [15, -14], b: [21, -30], w: 8, k: "jacket", bleed: 1.6 },
+  { a: [21, -28], b: [31, -20], w: 4.5, k: "jacket", bleed: 1 },
   { a: [25, -38], b: [25, -38], w: 11, k: "skin", head: true, bleed: 2 },
 ];
-const PROBES = [[25,44],[30,38],[21,30],[13,14],[31,20]]; // (forward, up): head, shoulder, hip, hand never touch the snow
+const VEHICLES = [
+  { id: "esqui", name: "Esqui", note: "O original: equilibrado em tudo.", rate: [3, 3, 3],
+    roll: 25, drag: .04, tough: 0, thrust: 0, mid: [18, 20], head: [25, -38],
+    parts: [{ a: [-10, 9], b: [53, 9], w: 3, k: "gear", shape: "ski" }, { a: [31, -20], b: [4, 7], w: 1.6, k: "gear" }, ...STAND],
+    probes: [[25, 44], [30, 38], [21, 30], [13, 14], [31, 20]] },
+  { id: "treno", name: "Trenó", note: "Baixinho e firme: aguenta pancadas mais fortes, mas desliza menos.", rate: [2, 4, 2],
+    roll: 30, drag: .045, tough: 100, thrust: 0, mid: [16, 14], head: [12, -30],
+    parts: [{ a: [-8, 8], b: [46, 8], w: 2.5, k: "gear", shape: "runner" }, { a: [-4, 1], b: [40, 1], w: 4.5, k: "wood" },
+      ...SIT(0, 0), { a: [28, -11], b: [44, 2], w: 1.2, k: "gear" }],
+    probes: [[12, 36], [11, 22], [24, 10], [28, 12]] },
+  { id: "snowboard", name: "Snowboard", note: "Desliza muito, mas é frágil na queda.", rate: [4, 2, 3],
+    roll: 16, drag: .035, tough: -50, thrust: 0, mid: [18, 20], head: [25, -38],
+    parts: [{ a: [-12, 8], b: [50, 8], w: 4, k: "gear", shape: "board" }, ...STAND.slice(0, 3),
+      { a: [21, -28], b: [34, -25], w: 4.5, k: "jacket", bleed: 1 }, { a: [19, -27], b: [8, -22], w: 4.5, k: "jacket", bleed: 1 }, STAND[4]],
+    probes: [[25, 44], [30, 38], [21, 30], [13, 14], [34, 25], [8, 22]] },
+  { id: "boia", name: "Boia", note: "Quase não se machuca, mas o ar segura: corre menos da avalanche.", rate: [2, 5, 3],
+    roll: 27, drag: .06, tough: 200, thrust: 0, mid: [18, 18], head: [19, -33],
+    parts: [{ a: [-9, -1], b: [45, -1], w: 17, k: "tube", shape: "ring" },
+      { a: [16, -8], b: [32, -12], w: 5.5, k: "pants", bleed: 1 }, { a: [32, -12], b: [44, -6], w: 5, k: "pants", bleed: 1 },
+      { a: [16, -8], b: [18, -25], w: 8, k: "jacket", bleed: 1.6 }, { a: [18, -23], b: [6, -11], w: 4.5, k: "jacket", bleed: 1 },
+      { a: [19, -33], b: [19, -33], w: 11, k: "skin", head: true, bleed: 2 }],
+    probes: [[19, 39], [18, 25], [32, 13], [6, 12]] },
+  { id: "esquibunda", name: "Esquibunda", note: "Sentado numa tábua, rente ao chão: passa por vãos baixos, mas é lento.", rate: [1, 3, 1],
+    roll: 34, drag: .045, tough: 50, thrust: 0, mid: [14, 11], head: [10, -24],
+    parts: [{ a: [-8, 7], b: [46, 7], w: 4, k: "wood", shape: "tray" },
+      { a: [6, -1], b: [23, -5], w: 5.5, k: "pants", bleed: 1 }, { a: [23, -5], b: [40, -1], w: 5, k: "pants", bleed: 1 },
+      { a: [6, -1], b: [9, -16], w: 8, k: "jacket", bleed: 1.6 }, { a: [9, -14], b: [22, -6], w: 4.5, k: "jacket", bleed: 1 },
+      { a: [10, -24], b: [10, -24], w: 11, k: "skin", head: true, bleed: 2 }],
+    probes: [[10, 30], [9, 16], [23, 9], [22, 9]] },
+  { id: "foguete", name: "Trenó-foguete", note: "Um foguete empurra enquanto encosta na neve. O mais rápido, e o mais frágil.", rate: [5, 1, 2],
+    roll: 25, drag: .04, tough: -75, thrust: 70, mid: [16, 14], head: [12, -30],
+    parts: [{ a: [-8, 8], b: [46, 8], w: 2.5, k: "gear", shape: "runner" }, { a: [-4, 1], b: [40, 1], w: 4.5, k: "metal" },
+      { a: [-24, -6], b: [-4, -6], w: 9, k: "metal", shape: "rocket" }, ...SIT(0, 0)],
+    probes: [[12, 36], [11, 22], [24, 10], [28, 12]] },
+];
+// looks only; a colour starting with -- is a theme token
+const CHARACTERS = [
+  { id: "rafa", name: "Rafa", jacket: "--car", pants: "--pants", skin: "--skin", hat: "--car", look: "gorro" },
+  { id: "bia", name: "Bia", jacket: "#7b3fc4", pants: "#24304a", skin: "#c98c62", hat: "#f08cc0", hair: "#3b2416", look: "rabo" },
+  { id: "ze", name: "Vô Zé", jacket: "#8a5a2b", pants: "#3f4a3a", skin: "#f3c8a8", hat: "#2f7d4a", hair: "#f4f4f4", look: "barba" },
+  { id: "kai", name: "Kai", jacket: "#1f9a6b", pants: "#2a2a2a", skin: "#7a4a2c", hat: "#f2c230", hair: "#141414", look: "faixa" },
+  { id: "pinguim", name: "Pinguim", jacket: "#22252b", pants: "#22252b", skin: "#22252b", hat: "#ff9a1f", look: "pinguim" },
+];
+let rider = { ch: 0, vh: 0 };
+try { const r = JSON.parse(localStorage.getItem("ladeira-rider") || "{}"); if (CHARACTERS[r.ch]) rider.ch = r.ch; if (VEHICLES[r.vh]) rider.vh = r.vh; } catch {}
+const VEH = () => VEHICLES[rider.vh], CHAR = () => CHARACTERS[rider.ch];
 
 const $ = s => document.querySelector(s);
 const cv = $("#cv"), ctx = cv.getContext("2d"), board = $("#board");
@@ -262,7 +343,7 @@ let fx = null, eagles = [], balls = [], shots = [], taken = new Set(), floaters 
 const helmets = new Set(); // levels whose helmet reached the finish: each one toughens the skier for good
 try { JSON.parse(localStorage.getItem("ladeira-capacetes") || "[]").forEach(i => helmets.add(i)); } catch {}
 let CRASH_V = CRASH_BASE;
-const toughen = () => { CRASH_V = CRASH_BASE + HELMET_BONUS * helmets.size; };
+const toughen = () => { CRASH_V = CRASH_BASE + HELMET_BONUS * helmets.size + VEH().tough; };
 toughen();
 
 const L = () => levelFor(lvl);
@@ -329,7 +410,7 @@ function collide(w) {
 const energy = () => car.w.reduce((e, w) => e + (w.vx * w.vx + w.vy * w.vy) / 2 - G * w.y, 0);
 let impact = false;
 function physics(dt) {
-  const h = dt / SUB, [a, b] = car.w;
+  const h = dt / SUB, [a, b] = car.w, V = VEH();
   for (let s = 0; s < SUB; s++) {
     const e0 = energy(); impact = false;
     for (const w of car.w) {
@@ -348,11 +429,12 @@ function physics(dt) {
       for (const w of car.w) { w.vx *= f; w.vy *= f; }
     }
     for (const w of car.w) {
-      w.vx *= 1 - DRAG * h; w.vy *= 1 - DRAG * h;
-      if (fx.turbo > 0) { const sp = Math.hypot(w.vx, w.vy); if (sp > 1) { w.vx += w.vx / sp * TURBO * h; w.vy += w.vy / sp * TURBO * h; } }
+      w.vx *= 1 - V.drag * h; w.vy *= 1 - V.drag * h;
+      const push = (fx.turbo > 0 ? TURBO : 0) + (w.c ? V.thrust : 0), sp = Math.hypot(w.vx, w.vy);
+      if (push && sp > 1) { w.vx += w.vx / sp * push * h; w.vy += w.vy / sp * push * h; }
       if (fx.lento > 0) { w.vx *= 1 - BRAKE * h; w.vy *= 1 - BRAKE * h; }
       if (w.c) { // snow friction along the surface
-        const tx = -w.ny, ty = w.nx, vt = w.vx * tx + w.vy * ty, dv = Math.min(Math.abs(vt), ROLL * h) * Math.sign(vt);
+        const tx = -w.ny, ty = w.nx, vt = w.vx * tx + w.vy * ty, dv = Math.min(Math.abs(vt), V.roll * h) * Math.sign(vt);
         w.vx -= tx * dv; w.vy -= ty * dv;
       }
     }
@@ -375,7 +457,7 @@ function update(dt) {
   for (const k of ["turbo", "lento", "gelo", "grace"]) fx[k] = Math.max(0, fx[k] - dt);
   physics(dt);
   if (state !== "run") return;
-  const [a, b] = car.w, probes = PROBES.map(p => local(...p));
+  const [a, b] = car.w, probes = VEH().probes.map(p => local(...p));
   if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo do esquiador bateu na neve. Curvas fechadas e lombadas derrubam ele.")) return;
   if (!fx.gelo) { tHaz += dt; moveAttackers(dt); } // the ice charm stops the world clock
   for (const d of dangers()) if (hits(d, probes)) { if (hurt(...WHY[d.why])) return; break; }
@@ -384,7 +466,7 @@ function update(dt) {
   pickUp(probes);
   if (car.w.some(w => w.y > H + 80 || w.x < -80 || w.x > W + 80)) return end("crash", "Despencou", "O esquiador saiu da pista e caiu montanha abaixo.");
   vNow = (Math.hypot(a.vx, a.vy) + Math.hypot(b.vx, b.vy)) / 2;
-  const [cx, cy] = local(18, 20), [gx, gy] = L().goal, dist = Math.hypot(cx - gx, cy - gy);
+  const [cx, cy] = local(...VEH().mid), [gx, gy] = L().goal, dist = Math.hypot(cx - gx, cy - gy);
   if (dist < GOAL_R) return end("win", "Chegou inteiro!", `Levou ${sec(tRun)} e cruzou a chegada a ${ms(vNow)}.`);
   if (dist < best - 2) { best = dist; stale = 0; } else stale += dt; // stopped or rocking in a valley = no new closest approach
   if (stale > 3.5) return end("crash", "Não chegou lá", "O esquiador perdeu o embalo. Só a gravidade empurra: a chegada precisa ficar mais baixa que o ponto mais alto do caminho.", false);
@@ -395,7 +477,7 @@ function hurt(title, text) {
   if (fx.grace > 0) return false;
   if (fx.shield > 0) {
     fx.shield--; fx.grace = GRACE;
-    const [x, y] = local(25, 50); floaters.push({ x, y, text: "Capacete salvou!", key: "gold", life: 1 });
+    const [x, y] = local(VEH().mid[0], VEH().mid[1] + 30); floaters.push({ x, y, text: "Capacete salvou!", key: "gold", life: 1 });
     return false;
   }
   end("crash", title, text); return true;
@@ -427,7 +509,7 @@ function front() {
   return { ox: x1 - ux * 70, oy: y1 - uy * 70, ux, uy, s: T > 0 ? v[1] * T + v[2] * T * T / 2 : -1 };
 }
 function moveAttackers(dt) {
-  const [cx, cy] = local(18, 20), vx = (car.w[0].vx + car.w[1].vx) / 2, vy = (car.w[0].vy + car.w[1].vy) / 2;
+  const [cx, cy] = local(...VEH().mid), vx = (car.w[0].vx + car.w[1].vx) / 2, vy = (car.w[0].vy + car.w[1].vy) / 2;
   for (const e of eagles) {
     if (tHaz < e.delay) continue;
     const dx = cx - e.x, dy = cy - e.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, STEER * dt);
@@ -468,7 +550,7 @@ function arm() { // fresh per-run magic so every Play starts the same
 function end(kind, title, text, boom = true) {
   state = kind;
   if (kind === "win") {
-    if (!reduce) burst(...local(18, 20));
+    if (!reduce) burst(...local(...VEH().mid));
     done.add(lvl); try { localStorage.setItem("ladeira-ski-done", JSON.stringify([...done])); } catch {}
     if (fx.helmet && !helmets.has(lvl)) {
       helmets.add(lvl); toughen(); try { localStorage.setItem("ladeira-capacetes", JSON.stringify([...helmets])); } catch {}
@@ -492,12 +574,12 @@ function burst(x, y) {
 function shatter() {
   const vx = (car.w[0].vx + car.w[1].vx) / 2, vy = (car.w[0].vy + car.w[1].vy) / 2;
   const power = clamp(Math.hypot(vx, vy) * .35, 160, 420);
-  rag = PARTS.map(p => {
+  rag = VEH().parts.map(p => {
     const A = local(p.a[0], -p.a[1]), B = local(p.b[0], -p.b[1]), ang = Math.random() * Math.PI * 2, s = power * (.3 + Math.random() * .7);
     return { ...p, x: (A[0] + B[0]) / 2, y: (A[1] + B[1]) / 2, hx: (B[0] - A[0]) / 2, hy: (B[1] - A[1]) / 2,
       vx: vx * .5 + Math.cos(ang) * s, vy: vy * .5 + Math.sin(ang) * s - power * .4, av: (Math.random() - .5) * 16, bleed: p.bleed || 0 };
   });
-  const [cx, cy] = local(20, 24);
+  const [cx, cy] = local(VEH().mid[0], VEH().mid[1] + 4);
   for (let i = 0; i < 70; i++) {
     const ang = Math.random() * Math.PI * 2, s = Math.random() * power * 1.1;
     drops.push({ x: cx, y: cy, vx: vx * .3 + Math.cos(ang) * s, vy: vy * .3 + Math.sin(ang) * s - 120 });
@@ -609,12 +691,57 @@ function refresh() {
   $("#clear").disabled = !edit || !drawings[lvl].length;
   cv.classList.toggle("busy", !edit);
 }
+// ---- character and vehicle picker ----
+const dots = n => "●".repeat(n) + "○".repeat(5 - n);
+function preview(c, ch, vh) { // the rider on a short slope, sized to the card
+  const g = c.getContext("2d"), d = devicePixelRatio || 1, w = c.clientWidth || 96, h = c.clientHeight || 72;
+  c.width = Math.round(w * d); c.height = Math.round(h * d);
+  cs = getComputedStyle(document.documentElement);
+  const C = {}; for (const n of ["paper", "graphite", "glass", "gold", "car", "hazard", "fire", "muted"]) C[n] = css(n);
+  const k = w / 96;
+  g.setTransform(d * k, 0, 0, d * k, 0, 0); g.fillStyle = C.paper; g.fillRect(0, 0, 96, 72);
+  const an = .22; g.strokeStyle = C.muted; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 46); g.lineTo(96, 46 + 96 * Math.tan(an)); g.stroke();
+  g.translate(24, 46 + 24 * Math.tan(an) - 9 * Math.cos(an)); g.rotate(an); g.scale(.9, .9);
+  paintRider(g, palette(C, ch), ch, vh);
+}
+function card(label, sub, pressed, onPick) {
+  const b = document.createElement("button"), c = document.createElement("canvas");
+  b.className = "opt"; b.type = "button"; b.setAttribute("aria-pressed", pressed);
+  b.append(c, Object.assign(document.createElement("span"), { textContent: label }));
+  if (sub) b.append(Object.assign(document.createElement("small"), { textContent: sub }));
+  b.onclick = onPick; return [b, c];
+}
+function renderPicker() {
+  const chars = CHARACTERS.map((ch, i) => card(ch.name, "", i === rider.ch, () => pickRider({ ch: i })));
+  const vehs = VEHICLES.map((vh, i) => card(vh.name, `vel ${dots(vh.rate[0])}\nres ${dots(vh.rate[1])}`, i === rider.vh, () => pickRider({ vh: i })));
+  $("#chars").replaceChildren(...chars.map(([b]) => b)); $("#vehs").replaceChildren(...vehs.map(([b]) => b));
+  vehs.forEach(([b]) => b.querySelector("small").style.whiteSpace = "pre");
+  chars.forEach(([, c], i) => preview(c, CHARACTERS[i], VEH())); vehs.forEach(([, c], i) => preview(c, CHAR(), VEHICLES[i]));
+  const v = VEH(), h = ["", "rente ao chão", "baixa", "normal"][v.rate[2]];
+  $("#vnote").textContent = `${v.name}: ${v.note} Aguenta pancada até ${ms(CRASH_BASE + HELMET_BONUS * helmets.size + v.tough)}. Altura: ${h}.`;
+  $("#who").textContent = `${CHAR().name} · ${VEH().name}`;
+}
+function pickRider(change) {
+  Object.assign(rider, change); toughen();
+  try { localStorage.setItem("ladeira-rider", JSON.stringify(rider)); } catch {}
+  renderPicker(); refresh();
+}
+function openPicker() {
+  if (state !== "edit") reset();
+  $("#picker").hidden = false; renderPicker();
+  $("#picker").querySelector('[aria-pressed="true"]').focus();
+}
+const closePicker = () => { $("#picker").hidden = true; $("#who").focus(); };
+$("#who").onclick = openPicker;
+$("#pkOk").onclick = closePicker;
+$("#picker").onclick = e => { if (e.target.id === "picker") closePicker(); };
 $("#play").onclick = play;
 $("#undo").onclick = undo;
 $("#clear").onclick = clearAll;
 $("#retry").onclick = reset;
 $("#next").onclick = () => select(lvl + 1);
 addEventListener("keydown", e => {
+  if (!$("#picker").hidden) { if (e.key === "Escape") closePicker(); return; }
   if (e.target.closest?.("button") && (e.key === " " || e.key === "Enter")) return;
   if (e.code === "Space") { e.preventDefault(); play(); }
   else if (e.key.toLowerCase() === "z") undo();
@@ -799,7 +926,7 @@ function drawFire(C, now) {
   }
 }
 function drawCannon(C, a) {
-  const [cx, cy] = car ? local(18, 20) : [W / 2, H / 2], an = Math.atan2(cy - a[2], cx - a[1]);
+  const [cx, cy] = car ? local(...VEH().mid) : [W / 2, H / 2], an = Math.atan2(cy - a[2], cx - a[1]);
   ctx.save(); ctx.translate(a[1], a[2]);
   ctx.save(); ctx.rotate(an); ctx.fillStyle = C.graphite; ctx.fillRect(0, -6, 26, 12); ctx.fillStyle = C.fire; ctx.fillRect(22, -6, 4, 12); ctx.restore();
   ctx.fillStyle = C.graphite; ctx.beginPath(); ctx.arc(0, 4, 14, Math.PI, 0); ctx.lineTo(16, 14); ctx.lineTo(-16, 14); ctx.closePath(); ctx.fill();
@@ -864,46 +991,97 @@ function drawItem(C, x, y, kind, now) {
   else { ctx.strokeStyle = C[key]; ctx.lineWidth = 2.5; for (let i = 0; i < 3; i++) { const an = i * Math.PI / 3, c = Math.cos(an) * 11, s = Math.sin(an) * 11; ctx.moveTo(-c, -s); ctx.lineTo(c, s); } ctx.stroke(); }
   ctx.restore();
 }
-// one body part as a thick outlined stroke between a and b (coords in the current transform)
-function limb(C, p, ax, ay, bx, by) {
-  ctx.lineCap = "round";
+// colours for one character: theme tokens resolved, plus the vehicle materials
+function palette(C, ch) {
+  const c = v => v && v.startsWith("--") ? css(v.slice(2)) : v;
+  return { ...C, jacket: c(ch.jacket), pants: c(ch.pants), skin: c(ch.skin), hat: c(ch.hat), hair: c(ch.hair || ch.hat),
+    gear: C.graphite, wood: "#a0612f", tube: "#e2452f", metal: "#8d96a3" };
+}
+// one part between a and b in the current transform: a body part as an outlined thick stroke, or a vehicle piece
+function paintPart(g, P, p, ax, ay, bx, by, t = 0) {
+  g.lineCap = "round";
   if (p.head) {
     const r = p.w / 2;
-    ctx.fillStyle = C.graphite; ctx.beginPath(); ctx.arc(ax, ay, r + 1.2, 0, 7); ctx.fill();
-    ctx.fillStyle = C.skin; ctx.beginPath(); ctx.arc(ax, ay, r, 0, 7); ctx.fill();
+    g.fillStyle = P.graphite; g.beginPath(); g.arc(ax, ay, r + 1.2, 0, 7); g.fill();
+    g.fillStyle = P.skin; g.beginPath(); g.arc(ax, ay, r, 0, 7); g.fill();
     return;
   }
-  if (p.k !== "graphite") { ctx.strokeStyle = C.graphite; ctx.lineWidth = p.w + 2.4; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
-  ctx.strokeStyle = C[p.k]; ctx.lineWidth = p.w; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  if (p.shape) { // vehicle pieces are drawn along their own a→b frame (x along the piece, y down)
+    const L = Math.hypot(bx - ax, by - ay) || 1;
+    g.save(); g.translate(ax, ay); g.rotate(Math.atan2(by - ay, bx - ax));
+    g.strokeStyle = P.graphite; g.fillStyle = P[p.k]; g.lineWidth = p.w;
+    if (p.shape === "ski") { g.beginPath(); g.moveTo(0, 0); g.lineTo(L - 9, 0); g.quadraticCurveTo(L - 2, 0, L, -6); g.stroke(); }
+    else if (p.shape === "runner") { g.beginPath(); g.moveTo(0, 0); g.lineTo(L - 10, 0); g.quadraticCurveTo(L + 2, 0, L - 2, -10); g.quadraticCurveTo(L - 6, -12, L - 8, -7); g.stroke();
+      g.lineWidth = 2; g.beginPath(); for (const x of [6, L / 2, L - 14]) { g.moveTo(x, 0); g.lineTo(x, -7); } g.stroke(); }
+    else if (p.shape === "board") { g.fillStyle = P.hat; g.lineWidth = 1.5; g.beginPath(); g.moveTo(4, -2); g.lineTo(L - 4, -2);
+      g.quadraticCurveTo(L + 1, -2, L + 1, -6); g.lineTo(L - 3, 2); g.lineTo(3, 2); g.lineTo(-1, -6); g.quadraticCurveTo(-1, -2, 4, -2); g.fill(); g.stroke(); }
+    else if (p.shape === "tray") { g.lineWidth = 1.5; g.beginPath(); g.roundRect(0, -p.w / 2, L, p.w, 2); g.fill(); g.stroke(); }
+    else if (p.shape === "ring") {
+      g.lineWidth = 1.6; g.beginPath(); g.ellipse(L / 2, 0, L / 2, p.w / 2, 0, 0, 7); g.fill(); g.stroke();
+      g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 2; g.beginPath(); g.ellipse(L / 2, -1, L / 2 - 6, p.w / 2 - 5, 0, Math.PI * 1.15, Math.PI * 1.75); g.stroke();
+    } else if (p.shape === "rocket") {
+      if (state === "run" && VEH().thrust) for (const [key, sc] of [["fire", 1], ["hazard", .55]]) { // exhaust
+        const len = (14 + 6 * Math.sin(t * 40)) * sc; g.fillStyle = P[key];
+        g.beginPath(); g.moveTo(0, -p.w / 2 * sc); g.quadraticCurveTo(-len * .6, 0, -len, 0); g.quadraticCurveTo(-len * .6, 0, 0, p.w / 2 * sc); g.fill();
+      }
+      g.fillStyle = P[p.k]; g.lineWidth = 1.5; g.beginPath(); g.roundRect(0, -p.w / 2, L, p.w, 3); g.fill(); g.stroke();
+      g.fillStyle = P.car; g.beginPath(); g.moveTo(2, -p.w / 2); g.lineTo(-3, -p.w / 2 - 6); g.lineTo(8, -p.w / 2); g.closePath(); g.fill(); g.stroke();
+    }
+    g.restore(); return;
+  }
+  if (p.k !== "gear") { g.strokeStyle = P.graphite; g.lineWidth = p.w + 2.4; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); }
+  g.strokeStyle = P[p.k]; g.lineWidth = p.w; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+}
+// hat, hair and face for each look around the head centre (hx, hy), facing +x; the magic helmet goes on top
+function paintHead(g, P, ch, hx, hy, helmet) {
+  g.lineWidth = 1; g.strokeStyle = P.graphite;
+  const cap = () => { g.fillStyle = P.hat; g.beginPath(); g.arc(hx, hy, 5.6, Math.PI * 1.05, Math.PI * 1.95); g.closePath(); g.fill(); };
+  const goggles = () => { g.fillStyle = P.glass; g.beginPath(); g.roundRect(hx + 1, hy - 1.5, 5, 3, 1); g.fill(); g.stroke(); };
+  if (ch.look === "gorro") { cap(); g.beginPath(); g.arc(hx - 1, hy - 7.5, 2.2, 0, 7); g.fill(); goggles(); }
+  else if (ch.look === "rabo") {
+    g.fillStyle = P.hair; g.beginPath(); g.ellipse(hx - 8, hy + 1, 4.5, 2.4, .5, 0, 7); g.fill();
+    g.beginPath(); g.arc(hx, hy, 5.7, Math.PI * .85, Math.PI * 1.6); g.lineTo(hx, hy); g.fill();
+    cap(); goggles();
+  } else if (ch.look === "barba") {
+    g.fillStyle = P.hair; g.beginPath(); g.ellipse(hx + 2.5, hy + 3.4, 4.2, 3.2, 0, 0, 7); g.fill();
+    g.fillStyle = P.hat; g.beginPath(); g.arc(hx, hy - 1, 5.8, Math.PI, 0); g.closePath(); g.fill(); g.fillRect(hx - 1, hy - 2, 9, 1.8);
+    g.fillStyle = P.graphite; g.beginPath(); g.arc(hx + 3, hy, .9, 0, 7); g.fill();
+  } else if (ch.look === "faixa") {
+    g.fillStyle = P.hair; g.beginPath(); g.arc(hx, hy, 5.7, Math.PI * .9, Math.PI * 1.9); g.closePath(); g.fill();
+    g.strokeStyle = P.hat; g.lineWidth = 2.2; g.beginPath(); g.moveTo(hx - 5, hy - 2.6); g.lineTo(hx + 5.4, hy - 2.6); g.stroke();
+    g.lineWidth = 1; g.strokeStyle = P.graphite; goggles();
+  } else if (ch.look === "pinguim") {
+    g.fillStyle = "#f6f6f2"; g.beginPath(); g.ellipse(hx + 2.2, hy + .8, 3.4, 4, 0, 0, 7); g.fill();
+    g.fillStyle = P.graphite; g.beginPath(); g.arc(hx + 3, hy - 1, 1, 0, 7); g.fill();
+    g.fillStyle = P.hat; g.beginPath(); g.moveTo(hx + 4.5, hy - .5); g.lineTo(hx + 10, hy + 1.2); g.lineTo(hx + 4.5, hy + 2.6); g.closePath(); g.fill();
+  }
+  if (helmet) {
+    g.fillStyle = P.gold; g.strokeStyle = P.graphite; g.lineWidth = 1.2;
+    g.beginPath(); g.arc(hx, hy, 7.2, Math.PI * .95, Math.PI * 2.05); g.closePath(); g.fill(); g.stroke();
+  }
+}
+// the whole rider in rider-local coordinates (x forward, y down from the rear contact)
+function paintRider(g, P, ch, vh, t = 0, helmet = false) {
+  for (const p of vh.parts) {
+    paintPart(g, P, p, p.a[0], p.a[1], p.b[0], p.b[1], t);
+    if (ch.look === "pinguim" && p.k === "jacket" && p.w === 8) { // white belly down the front of the torso
+      g.strokeStyle = "#f6f6f2"; g.lineWidth = 3.4; g.beginPath(); g.moveTo(p.a[0] + 2.5, p.a[1] - 2); g.lineTo(p.b[0] + 2.5, p.b[1] + 3); g.stroke();
+    }
+  }
+  paintHead(g, P, ch, vh.head[0], vh.head[1], helmet);
 }
 function drawSkier(C, now = 0) {
   const a = car.w[0], f = basis();
-  ctx.save(); ctx.translate(a.x, a.y);
-  if (fx?.grace > 0 && Math.floor(now * 12) % 2) ctx.globalAlpha = .35; // just lost the helmet ctx.transform(f.ux, f.uy, -f.nx, -f.ny, 0, 0); // local: x forward, y down
-  for (const p of PARTS) {
-    if (p.ski) { // ski with an upturned tip
-      ctx.strokeStyle = C.graphite; ctx.lineWidth = p.w; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(-10, 9); ctx.lineTo(44, 9); ctx.quadraticCurveTo(51, 9, 53, 3); ctx.stroke();
-      continue;
-    }
-    limb(C, p, p.a[0], p.a[1], p.b[0], p.b[1]);
-  }
-  // beanie (or the magic helmet) and goggles
-  if (fx?.shield > 0) {
-    ctx.fillStyle = C.gold; ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(25, -38, 7.2, Math.PI * .95, Math.PI * 2.05); ctx.closePath(); ctx.fill(); ctx.stroke();
-  } else {
-    ctx.fillStyle = C.car; ctx.beginPath(); ctx.arc(25, -38, 5.6, Math.PI * 1.05, Math.PI * 1.95); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.arc(24, -45.5, 2.2, 0, 7); ctx.fill();
-  }
-  ctx.fillStyle = C.glass; ctx.strokeStyle = C.graphite; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(26, -39.5, 5, 3, 1); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(a.x, a.y); ctx.transform(f.ux, f.uy, -f.nx, -f.ny, 0, 0); // local: x forward, y down
+  if (fx?.grace > 0 && Math.floor(now * 12) % 2) ctx.globalAlpha = .35; // just lost the helmet
+  paintRider(ctx, palette(C, CHAR()), CHAR(), VEH(), now, fx?.shield > 0);
   ctx.restore();
 }
 function drawRag(C) {
-  for (const p of rag) limb(C, p, p.x + p.hx, p.y + p.hy, p.x - p.hx, p.y - p.hy);
+  const P = palette(C, CHAR());
+  for (const p of rag) paintPart(ctx, P, p, p.x + p.hx, p.y + p.hy, p.x - p.hx, p.y - p.hy);
   ctx.fillStyle = C.blood; // open wounds on the torn ends
-  for (const p of rag) if (!p.head && p.k !== "graphite") { ctx.beginPath(); ctx.arc(p.x + p.hx, p.y + p.hy, Math.min(3.2, p.w / 2), 0, 7); ctx.fill(); }
+  for (const p of rag) if (!p.head && !p.shape && p.k !== "gear" && p.k !== "wood" && p.k !== "metal") { ctx.beginPath(); ctx.arc(p.x + p.hx, p.y + p.hy, Math.min(3.2, p.w / 2), 0, 7); ctx.fill(); }
 }
 
 let last = performance.now();
@@ -921,12 +1099,14 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
-window.claude?.hot?.snapshot?.(() => ({ v: 3, lvl, land, sketches, done: [...done] }));
+window.claude?.hot?.snapshot?.(() => ({ v: 3, lvl, land, sketches, done: [...done], rider }));
 function start(d = {}) {
   if (d.v === 3 && d.sketches?.false?.length === LEVELS.length) { sketches.false = d.sketches.false; sketches.true = d.sketches.true; }
   if (d.v === 3 && Number.isInteger(d.lvl) && LEVELS[d.lvl]) lvl = d.lvl;
   if (d.v === 3) land = !!d.land;
   if (Array.isArray(d.done)) d.done.forEach(i => done.add(i));
+  if (d.rider && CHARACTERS[d.rider.ch] && VEHICLES[d.rider.vh]) rider = d.rider;
+  toughen(); $("#who").textContent = `${CHAR().name} · ${VEH().name}`;
   setLand(land); requestAnimationFrame(loop);
 }
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});

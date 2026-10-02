@@ -9,6 +9,24 @@ Jogo de navegador com física de gravidade. Você desenha a pista na montanha co
 - O esquiador quebra se bater com o corpo na neve, se pancar a mais de 7,5 m/s, se encostar numa área listrada ou se cair do mapa.
 - Curvas fechadas e lombadas fazem ele voar: desenhe curvas suaves.
 
+## Personagem e transporte
+
+O botão com o nome do personagem, ao lado do seletor de fases, abre a escolha de quem desce e em quê. A escolha fica salva.
+
+- **Personagens:** Rafa, Bia, Vô Zé, Kai e Pinguim. Eles mudam só a aparência.
+- **Transportes:** cada um muda a descida de verdade.
+
+| Transporte | Como desce |
+|---|---|
+| Esqui | O original, equilibrado. Aguenta pancada até 7,5 m/s. |
+| Trenó | Mais baixo e firme: aguenta 8,5 m/s, mas desliza menos. |
+| Snowboard | Desliza mais, mas aguenta só 7,0 m/s. |
+| Boia | Aguenta 9,5 m/s, mas o ar segura bastante, então corre menos da avalanche. |
+| Esquibunda | Sentado numa tábua, rente ao chão: passa por vãos mais baixos, mas é o mais lento. |
+| Trenó-foguete | Um foguete empurra enquanto ele encosta na neve. É o mais rápido e o mais frágil (6,75 m/s). |
+
+Os capacetes mágicos somam resistência a qualquer transporte.
+
 ## Fases
 
 São 50 fases. Da 7 à 16 os obstáculos se movem. Da 17 à 21 elas voltam a ser paradas, mas com formatos novos: túnel, vale, contramão (descida da direita para a esquerda), montanha-russa (a chegada fica no alto e você tem que descer antes para pegar embalo) e escadaria. Da 22 à 36 tudo se move de novo: portas de correr, pistões, avalanche, elevadores, fresta móvel e o grande final. No seletor, as fases com obstáculos móveis têm ↔.
