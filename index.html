@@ -54,8 +54,11 @@ body{background:var(--desk);color:var(--graphite);font-family:var(--f-ui);-webki
 h1{font-family:var(--f-hand);font-weight:700;font-size:2rem;line-height:1;margin:0;color:var(--ink);text-wrap:balance}
 .tag{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .pick{margin-left:auto;display:flex;gap:8px;min-width:0}
-select{font:600 .95rem/1.2 var(--f-ui);padding:.6rem .7rem;border-radius:8px;border:1.5px solid var(--edge);background:var(--panel);color:var(--graphite);min-width:0;max-width:16rem}
-select:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+/* level menu button: drawn by the page (a native select's popup would not turn with the app in sideways mode) */
+#lvlBtn{min-width:0;max-width:16rem;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:.6rem .7rem;line-height:1.2}
+.lvsec{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:6px}
+.lvsec button{text-align:left;padding:.55rem .7rem;line-height:1.25;font-weight:600}
+.lvsec button[aria-current="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
 .board{flex:1;min-height:0;display:grid;place-items:center;position:relative}
 canvas{display:block;border-radius:6px;touch-action:none;cursor:crosshair;box-shadow:0 0 0 1.5px var(--edge),0 14px 30px -20px rgba(0,0,0,.55)}
 canvas.busy{cursor:default}
@@ -70,7 +73,7 @@ button.primary{background:var(--car);border-color:var(--car);color:var(--on-car)
 /* character and vehicle picker: covers the app (and turns with it in sideways mode) */
 .app{position:relative}
 .picker{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:12px;background:rgba(10,20,30,.45)}
-.pk{width:min(100%,40rem);max-height:100%;overflow:auto;display:grid;gap:.6rem;background:var(--paper);border:2px solid var(--graphite);border-radius:10px;padding:1rem 1.1rem 1.1rem;box-shadow:6px 6px 0 var(--graphite)}
+.pk{position:relative;width:min(100%,40rem);max-height:100%;overflow:auto;display:grid;gap:.6rem;background:var(--paper);border:2px solid var(--graphite);border-radius:10px;padding:1rem 1.1rem 1.1rem;box-shadow:6px 6px 0 var(--graphite)}
 .pk h2{margin:0;font-family:var(--f-hand);font-weight:700;font-size:1.9rem;line-height:1.05;color:var(--ink)}
 .pk h3{margin:.2rem 0 0;font:600 .8rem/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.6rem,1fr));gap:8px}
@@ -83,13 +86,13 @@ button.primary{background:var(--car);border-color:var(--car);color:var(--on-car)
 /* sideways: board on the left, controls in a column on the right */
 .app.land{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 10rem;grid-template-rows:auto 1fr;gap:8px 12px}
 .app.land .board{grid-column:1;grid-row:1/3}
-.app.land header,.app.land footer{grid-column:2;flex-direction:column;align-items:stretch;gap:8px}
+.app.land header,.app.land footer{grid-column:2;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:8px} /* nowrap: a wrapping column grows to its widest child */
 .app.land footer{grid-row:2;justify-content:flex-end}
 .app.land h1{font-size:1.45rem}
 .app.land .tag,.app.land .info .more{display:none}
 .app.land .pick{margin-left:0;flex-direction:column}
 .app.land #who{white-space:normal}
-.app.land select{max-width:none}
+.app.land #lvlBtn{max-width:none}
 .app.land .info{flex:0 0 auto}
 .app.land .controls .btns{flex-direction:column}
 .app.land .controls .btns button{height:2.9rem}
@@ -107,7 +110,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
   h1{font-size:1.5rem}
   .tag,.info .more{display:none}
   .app:not(.land) .pick{margin-left:0;width:100%}
-  .app:not(.land) select{flex:1;max-width:none}
+  .app:not(.land) #lvlBtn{flex:1;max-width:none}
   .app:not(.land) .info{flex-basis:100%;text-align:center}
   .app:not(.land) .controls .btns{width:100%}
   .app:not(.land) .controls .btns button{flex:1;height:3.2rem;padding:0 .5rem}
@@ -121,7 +124,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
   <header class="bar">
     <div class="brand"><h1>Ladeira Abaixo</h1><span class="tag">esqui sem bastão · só gravidade</span></div>
     <div class="pick">
-      <select id="lvlSel" aria-label="Fase"></select>
+      <button id="lvlBtn" aria-haspopup="dialog" title="Escolher fase"></button>
       <button id="who" title="Escolher personagem e transporte" aria-haspopup="dialog"></button>
       <button id="turn" title="Trocar entre jogar em pé e deitado">⟳ Deitar</button>
     </div>
@@ -136,6 +139,13 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
       </div>
     </div>
   </main>
+  <div class="picker" id="lvlMenu" role="dialog" aria-modal="true" aria-labelledby="lvTitle" hidden>
+    <div class="pk">
+      <h2 id="lvTitle">Escolha a fase</h2>
+      <div id="lvList"></div>
+      <div class="btns"><button id="lvClose">Fechar</button></div>
+    </div>
+  </div>
   <div class="picker" id="picker" role="dialog" aria-modal="true" aria-labelledby="pkTitle" hidden>
     <div class="pk">
       <h2 id="pkTitle">Quem desce, e em quê?</h2>
@@ -655,16 +665,30 @@ function optText(l, i) {
   return `${i + 1}. ${l.name}${moves ? " ↔" : ""}${helm}${done.has(i) ? "  ✓" : ""}`;
 }
 function renderLevels() {
-  const sel = $("#lvlSel");
-  sel.replaceChildren(...SECTIONS.map(([from, title], k) => {
-    const g = document.createElement("optgroup"), to = SECTIONS[k + 1]?.[0] ?? LEVELS.length;
-    g.label = title;
-    for (let i = from; i < to; i++) g.append(new Option(optText(LEVELS[i], i), i));
-    return g;
+  $("#lvlBtn").textContent = optText(LEVELS[lvl], lvl) + "  ▾";
+  $("#lvList").replaceChildren(...SECTIONS.flatMap(([from, title], k) => {
+    const to = SECTIONS[k + 1]?.[0] ?? LEVELS.length, grid = document.createElement("div");
+    grid.className = "lvsec";
+    for (let i = from; i < to; i++) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = optText(LEVELS[i], i); b.setAttribute("aria-current", i === lvl);
+      b.onclick = () => { closeLevels(); select(i); };
+      grid.append(b);
+    }
+    return [Object.assign(document.createElement("h3"), { textContent: title }), grid];
   }));
-  sel.value = lvl;
 }
-$("#lvlSel").onchange = e => select(+e.target.value);
+function openLevels() {
+  if (state !== "edit") reset();
+  $("#lvlMenu").hidden = false;
+  const cur = $("#lvList").querySelector('[aria-current="true"]');
+  const box = cur.closest(".pk"); box.scrollTop = cur.offsetTop - box.clientHeight / 2; // not scrollIntoView: it would scroll the turned page too
+  cur.focus({ preventScroll: true });
+}
+const closeLevels = () => { $("#lvlMenu").hidden = true; $("#lvlBtn").focus(); };
+$("#lvlBtn").onclick = openLevels;
+$("#lvClose").onclick = closeLevels;
+$("#lvlMenu").onclick = e => { if (e.target.id === "lvlMenu") closeLevels(); };
 function orient() { // sideways mode on a portrait screen = turn the app so the phone can be held sideways
   const r = document.documentElement.style;
   r.setProperty("--vw", innerWidth + "px"); r.setProperty("--vh", innerHeight + "px");
@@ -742,6 +766,7 @@ $("#retry").onclick = reset;
 $("#next").onclick = () => select(lvl + 1);
 addEventListener("keydown", e => {
   if (!$("#picker").hidden) { if (e.key === "Escape") closePicker(); return; }
+  if (!$("#lvlMenu").hidden) { if (e.key === "Escape") closeLevels(); return; }
   if (e.target.closest?.("button") && (e.key === " " || e.key === "Enter")) return;
   if (e.code === "Space") { e.preventDefault(); play(); }
   else if (e.key.toLowerCase() === "z") undo();

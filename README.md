@@ -11,7 +11,7 @@ Jogo de navegador com física de gravidade. Você desenha a pista na montanha co
 
 ## Personagem e transporte
 
-O botão com o nome do personagem, ao lado do seletor de fases, abre a escolha de quem desce e em quê. A escolha fica salva.
+O botão com o nome do personagem, ao lado do botão de fases, abre a escolha de quem desce e em quê. A escolha fica salva.
 
 - **Personagens:** Rafa, Bia, Vô Zé, Kai e Pinguim. Eles mudam só a aparência.
 - **Transportes:** cada um muda a descida de verdade.
