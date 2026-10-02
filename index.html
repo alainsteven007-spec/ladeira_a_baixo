@@ -17,6 +17,7 @@
   --car:#d4252c; --on-car:#ffffff; --glass:#cfe6f2;
   --skin:#f0c29c; --pants:#2c3a66; --blood:#a5101a;
   --hazard:#efb21a; --ok:#1f8446; --bad:#c22a2a;
+  --fire:#f0561d; --gold:#d19a00; --ice:#1f9fd6; --slow:#7a4bd0; --snow:#ffffff; --snow-edge:#8fa9bd;
   --f-hand:"Kalam","Segoe Print","Comic Sans MS",cursive;
   --f-ui:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
@@ -29,6 +30,7 @@
     --car:#ff5a52; --on-car:#2a0606; --glass:#bfe3ff;
     --skin:#f5cfae; --pants:#1b2440; --blood:#e3263a;
     --hazard:#ffb627; --ok:#62d68b; --bad:#ff8a80;
+    --fire:#ff6a2b; --gold:#ffcf3f; --ice:#6fd3ff; --slow:#b892ff; --snow:#e9f2ff; --snow-edge:#9fb5d4;
     color-scheme:dark;
   }
 }
@@ -39,6 +41,7 @@
   --car:#ff5a52; --on-car:#2a0606; --glass:#bfe3ff;
   --skin:#f5cfae; --pants:#1b2440; --blood:#e3263a;
   --hazard:#ffb627; --ok:#62d68b; --bad:#ff8a80;
+  --fire:#ff6a2b; --gold:#ffcf3f; --ice:#6fd3ff; --slow:#b892ff; --snow:#e9f2ff; --snow-edge:#9fb5d4;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -132,10 +135,17 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
 // World units: 100 px = 1 m, portrait slope. The skier rides on two ski contact points joined by a rigid
 // link (position-based dynamics); the body is drawn on top and only checked for hits.
 let W = 700, H = 1000; const PX = 100, G = 9.81 * PX, R = 9, AXLE = 36, SUB = 10;
-const CRASH_V = 750, VMAX = 2500, GOAL_R = 42, ROLL = 25, DRAG = 0.04, SPIN = 3.5, T_MAX = 40;
+const CRASH_BASE = 750, HELMET_BONUS = 50, VMAX = 2500, GOAL_R = 42, ROLL = 25, DRAG = 0.04, SPIN = 3.5, T_MAX = 40;
 // Levels are authored for the 700×1000 portrait slope; sideways play stretches them to 1000×700.
 // start: launch pad [x1,y1,x2,y2] (skier faces from 1 to 2); goal: [x,y]
 // haz: deadly rects [x,y,w,h] — moving ones add [dx,dy,period s,phase 0..1] and sweep from x,y to x+dx,y+dy and back
+// fire: flame vents [x,y,w,h,period s,lit 0..1,phase 0..1,nozzle] — the rect burns for the lit share of each period;
+//   nozzle is the side the flames shoot from: 0 bottom, 1 top, 2 left, 3 right
+// aval: [delay s, speed px/s, accel px/s²] — a snow front starts behind the pad and sweeps toward the goal
+// atk: ["aguia", x, y, delay s, speed px/s] chases the skier; ["canhao", x, y, first shot s, every s, ball px/s] fires fireballs
+//   aimed where the skier would be if it kept going straight
+// items: [x, y, kind] — "capacete" takes one hit (and, kept to the finish, adds resistance for good), "turbo" pushes
+//   for 3 s, "lento" brakes for 3 s, "gelo" freezes everything that moves (and the clock that drives it) for 3 s
 const LEVELS = [
   { name: "Primeira descida", start: [30,110,150,145], goal: [600,880], haz: [] },
   { name: "Desvio", start: [30,110,150,145], goal: [620,880], haz: [[0,620,320,50]] },
@@ -175,20 +185,50 @@ const LEVELS = [
   { name: "Escada rolante", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205],[340,215,30,30,0,330,1.4,.3],[500,445,30,30,0,330,1.2,.6]] },
   { name: "Vagonete", start: [30,110,150,145], goal: [640,420], haz: [[400,0,120,360],[0,700,700,300],[300,560,60,40,260,0,2.2,.25],[560,380,40,40,0,200,1.8,.7]] },
   { name: "Grande final", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205],[340,-300,30,500,0,330,1.3,.025],[500,-70,30,500,0,330,1.1,.525],[200,-60,40,40,0,1100,1.7,.9]] },
+  // modes: fire vents and fireballs, an avalanche on your tail, eagles and cannons that hunt the skier, then all at once
+  { name: "Fogueira", start: [30,110,150,145], goal: [620,870], haz: [[400,420,120,120]], fire: [[290,300,60,320,1.8,.55,.95,0]], items: [[560,330,"turbo"]] },
+  { name: "Lança-chamas", start: [30,110,150,145], goal: [620,870], haz: [], fire: [[80,300,280,50,1.6,.45,.05,2],[330,600,370,50,1.4,.5,.65,3]], items: [[520,560,"capacete"]] },
+  { name: "Vulcão", start: [30,110,150,145], goal: [640,420], haz: [[400,0,120,360],[0,700,700,300]], fire: [[430,430,100,270,1.8,.45,.8,0]], atk: [["canhao",60,660,1.3,1.4,450]] },
+  { name: "Fornalha", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205]], fire: [[320,420,50,210,1.5,.5,.75,0],[470,560,50,240,1.3,.5,.15,0]] },
+  { name: "Onda branca", start: [30,110,150,145], goal: [620,880], haz: [], aval: [.8,300,600], items: [[300,375,"lento"]] },
+  { name: "Fuga do túnel", start: [30,110,150,145], goal: [620,870], haz: [[380,300,320,190],[0,760,360,240]], aval: [.8,300,600], items: [[330,715,"capacete"]] },
+  { name: "Contramão gelada", start: [670,110,550,145], goal: [80,870], haz: [[0,0,310,520],[380,620,320,380]], aval: [.8,300,600], items: [[440,560,"turbo"]] },
+  { name: "Vale da avalanche", start: [30,110,150,145], goal: [640,740], haz: [[450,280,250,370],[200,840,500,160]], aval: [.8,300,400], items: [[400,500,"gelo"]] },
+  { name: "Águia", start: [30,110,150,145], goal: [640,420], haz: [[400,0,120,360],[0,700,700,300]], atk: [["aguia",80,300,.8,800]] },
+  { name: "Canhão", start: [30,110,150,145], goal: [620,870], haz: [[400,420,120,120]], atk: [["canhao",650,600,1,1,900]], items: [[200,700,"gelo"]] },
+  { name: "Ninho", start: [30,110,150,145], goal: [620,870], haz: [], atk: [["aguia",470,610,1.4,500],["aguia",80,320,.8,800]], items: [[580,520,"capacete"]] },
+  { name: "Bombardeio", start: [30,420,150,455], goal: [640,880], haz: [[380,300,50,40,0,450,1.6,.55]], atk: [["canhao",640,120,.3,1,500],["canhao",60,900,1.3,1.2,500]] },
+  { name: "Inferno branco", start: [30,110,150,145], goal: [620,870], haz: [[400,420,120,120]], fire: [[380,560,60,260,1.6,.5,.45,0]], aval: [.8,300,600], atk: [["aguia",640,200,.4,700]], items: [[470,380,"turbo"]] },
+  { name: "Fim do mundo", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205]], fire: [[320,420,50,210,1.5,.5,.5,0]], aval: [.8,300,600], atk: [["canhao",660,120,.3,.6,450]], items: [[470,470,"capacete"],[520,520,"gelo"]] },
 ];
+const SECTIONS = [[0, "Clássicas"], [16, "Novas formas"], [36, "🔥 Fogo"], [40, "🏔 Avalanche"], [44, "🦅 Ataque"], [48, "☠ Tudo junto"]];
 let land = false; // sideways play
+const LAND_PACE = .7;
 const levelCache = {};
 function levelFor(i) { // the level as played in the current orientation
   const key = land + ":" + i;
   if (!levelCache[key]) {
     const src = LEVELS[i], sx = land ? 1000 / 700 : 1, sy = land ? 700 / 1000 : 1;
+    // sideways the slope is lower and the skier slower, so fire, avalanche and hunters run on a slower clock:
+    // their times are divided by p and their speeds multiplied by it
+    const p = land ? LAND_PACE : 1;
     levelCache[key] = { name: src.name,
       start: src.start.map((v, j) => v * (j % 2 ? sy : sx)), goal: [src.goal[0] * sx, src.goal[1] * sy],
-      haz: src.haz.map(h => h.map((v, j) => j < 6 ? v * (j % 2 ? sy : sx) : v)) };
+      haz: src.haz.map(h => h.map((v, j) => j < 6 ? v * (j % 2 ? sy : sx) : v)),
+      fire: (src.fire || []).map(f => f.map((v, j) => j < 4 ? v * (j % 2 ? sy : sx) : j === 4 ? v / p : v)),
+      atk: (src.atk || []).map(a => a[0] === "aguia" ? [a[0], a[1] * sx, a[2] * sy, a[3] / p, a[4] * p]
+        : [a[0], a[1] * sx, a[2] * sy, a[3] / p, a[4] / p, a[5] * p]),
+      items: (src.items || []).map(([x, y, k]) => [x * sx, y * sy, k]) };
+    if (src.aval) { // the front travels along pad end → goal; stretch its speed with that distance too
+      const [, , px, py] = src.start, [gx, gy] = src.goal, k = Math.hypot((gx - px) * sx, (gy - py) * sy) / Math.hypot(gx - px, gy - py);
+      levelCache[key].aval = [src.aval[0] / p, src.aval[1] * k * p, src.aval[2] * k * p * p];
+    }
   }
   return levelCache[key];
 }
 let tHaz = 0; // obstacle clock: runs freely while drawing, restarts at 0 on Play so every run is the same
+const lit = (f, t = tHaz) => (t / f[4] + f[6]) % 1 < f[5];
+const warm = (f, t = tHaz) => !lit(f, t) && (t / f[4] + f[6]) % 1 > 1 - .45 / f[4]; // about to light
 function hazAt(h, t = tHaz) {
   if (h.length < 5) return h;
   const k = (1 - Math.cos(2 * Math.PI * (t / h[6] + h[7]))) / 2;
@@ -216,6 +256,14 @@ let segs = [], state = "edit", car = null, stroke = null, parts = [], rag = [], 
 let tRun = 0, best = 0, stale = 0, vNow = 0, endTimer = 0;
 try { JSON.parse(localStorage.getItem("ladeira-ski-done") || "[]").forEach(i => done.add(i)); } catch {}
 try { land = localStorage.getItem("ladeira-land") === "1"; } catch {}
+// magic: power-up timers and helmet charges for this run, attackers in flight, items already taken
+const FX_T = 3, GRACE = 1.2, TURBO = 6 * PX, BRAKE = 1.8, STEER = 3;
+let fx = null, eagles = [], balls = [], shots = [], taken = new Set(), floaters = [];
+const helmets = new Set(); // levels whose helmet reached the finish: each one toughens the skier for good
+try { JSON.parse(localStorage.getItem("ladeira-capacetes") || "[]").forEach(i => helmets.add(i)); } catch {}
+let CRASH_V = CRASH_BASE;
+const toughen = () => { CRASH_V = CRASH_BASE + HELMET_BONUS * helmets.size; };
+toughen();
 
 const L = () => levelFor(lvl);
 const fmt = (v, d = 1) => v.toFixed(d).replace(".", ",");
@@ -274,7 +322,7 @@ function collide(w) {
     w.x += ex * (R - d); w.y += ey * (R - d); w.c = true; w.nx = ex; w.ny = ey;
     const vn = w.vx * ex + w.vy * ey; // approach speed before this step
     if (vn < -100) impact = true;
-    if (vn < -CRASH_V && state === "run") end("crash", "Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. O esquiador aguenta até ${ms(CRASH_V)}.`);
+    if (vn < -CRASH_V && state === "run") hurt("Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. O esquiador aguenta até ${ms(CRASH_V)}.`);
   }
 }
 // ½v² + g·height for both contacts (per unit mass; y grows downward)
@@ -301,6 +349,8 @@ function physics(dt) {
     }
     for (const w of car.w) {
       w.vx *= 1 - DRAG * h; w.vy *= 1 - DRAG * h;
+      if (fx.turbo > 0) { const sp = Math.hypot(w.vx, w.vy); if (sp > 1) { w.vx += w.vx / sp * TURBO * h; w.vy += w.vy / sp * TURBO * h; } }
+      if (fx.lento > 0) { w.vx *= 1 - BRAKE * h; w.vy *= 1 - BRAKE * h; }
       if (w.c) { // snow friction along the surface
         const tx = -w.ny, ty = w.nx, vt = w.vx * tx + w.vy * ty, dv = Math.min(Math.abs(vt), ROLL * h) * Math.sign(vt);
         w.vx -= tx * dv; w.vy -= ty * dv;
@@ -313,19 +363,25 @@ function physics(dt) {
     }
   }
 }
+const WHY = {
+  haz: ["Bateu na pedra!", "O esquiador encostou na área listrada. Desvie dela com a pista."],
+  fire: ["Queimou!", "Passou pelo fogo aceso. As chamas acendem e apagam: acerte o tempo mudando a pista."],
+  aguia: ["A águia pegou!", "A águia mergulhou no esquiador. Desça mais rápido que ela, ou passe longe do ninho."],
+  bola: ["Bola de fogo!", "O canhão mira onde o esquiador vai estar se seguir reto. Faça curvas para a bola errar."],
+  aval: ["Soterrado!", "A avalanche alcançou o esquiador. Desenhe uma descida mais rápida."],
+};
 function update(dt) {
   tRun += dt;
+  for (const k of ["turbo", "lento", "gelo", "grace"]) fx[k] = Math.max(0, fx[k] - dt);
   physics(dt);
   if (state !== "run") return;
-  const [a, b] = car.w, f = basis(), probes = PROBES.map(p => local(...p));
-  if (probes.some(([px, py]) => touch(px, py, 2.5))) return end("crash", "Caiu de cabeça!", "O corpo do esquiador bateu na neve. Curvas fechadas e lombadas derrubam ele.");
-  tHaz = tRun;
-  for (const hz of L().haz) {
-    const [hx, hy, hw, hh] = hazAt(hz);
-    const hitW = car.w.some(w => (w.x - clamp(w.x, hx, hx + hw)) ** 2 + (w.y - clamp(w.y, hy, hy + hh)) ** 2 < R * R);
-    const hitP = probes.some(([px, py]) => px > hx && px < hx + hw && py > hy && py < hy + hh);
-    if (hitW || hitP) return end("crash", "Bateu na pedra!", "O esquiador encostou na área listrada. Desvie dela com a pista.");
-  }
+  const [a, b] = car.w, probes = PROBES.map(p => local(...p));
+  if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo do esquiador bateu na neve. Curvas fechadas e lombadas derrubam ele.")) return;
+  if (!fx.gelo) { tHaz += dt; moveAttackers(dt); } // the ice charm stops the world clock
+  for (const d of dangers()) if (hits(d, probes)) { if (hurt(...WHY[d.why])) return; break; }
+  const F = front();
+  if (F && F.s > 0 && probes.concat(car.w.map(w => [w.x, w.y])).some(([px, py]) => (px - F.ox) * F.ux + (py - F.oy) * F.uy < F.s) && hurt(...WHY.aval)) return;
+  pickUp(probes);
   if (car.w.some(w => w.y > H + 80 || w.x < -80 || w.x > W + 80)) return end("crash", "Despencou", "O esquiador saiu da pista e caiu montanha abaixo.");
   vNow = (Math.hypot(a.vx, a.vy) + Math.hypot(b.vx, b.vy)) / 2;
   const [cx, cy] = local(18, 20), [gx, gy] = L().goal, dist = Math.hypot(cx - gx, cy - gy);
@@ -334,11 +390,90 @@ function update(dt) {
   if (stale > 3.5) return end("crash", "Não chegou lá", "O esquiador perdeu o embalo. Só a gravidade empurra: a chegada precisa ficar mais baixa que o ponto mais alto do caminho.", false);
   if (tRun > T_MAX) return end("crash", "Tempo esgotado", `Passaram ${T_MAX} s e o esquiador não chegou.`, false);
 }
+// a hit ends the run unless the helmet takes it; after that the skier gets a moment to get clear
+function hurt(title, text) {
+  if (fx.grace > 0) return false;
+  if (fx.shield > 0) {
+    fx.shield--; fx.grace = GRACE;
+    const [x, y] = local(25, 50); floaters.push({ x, y, text: "Capacete salvou!", key: "gold", life: 1 });
+    return false;
+  }
+  end("crash", title, text); return true;
+}
+// everything that kills on touch right now: rects r [x,y,w,h] or circles c [x,y,radius]
+function dangers() {
+  const out = [];
+  for (const h of L().haz) out.push({ r: hazAt(h), why: "haz" });
+  for (const f of L().fire) if (lit(f)) out.push({ r: f.slice(0, 4), why: "fire" });
+  for (const a of L().atk) if (a[0] === "canhao") out.push({ r: [a[1] - 16, a[2] - 14, 32, 28], why: "haz" });
+  for (const e of eagles) out.push({ c: [e.x, e.y, 15], why: "aguia" });
+  for (const o of balls) out.push({ c: [o.x, o.y, 10], why: "bola" });
+  return out;
+}
+function hits(d, probes) {
+  if (d.r) {
+    const [hx, hy, hw, hh] = d.r;
+    return car.w.some(w => (w.x - clamp(w.x, hx, hx + hw)) ** 2 + (w.y - clamp(w.y, hy, hy + hh)) ** 2 < R * R)
+      || probes.some(([px, py]) => px > hx && px < hx + hw && py > hy && py < hy + hh);
+  }
+  const [cx, cy, r] = d.c;
+  return car.w.some(w => Math.hypot(w.x - cx, w.y - cy) < r + R) || probes.some(([px, py]) => Math.hypot(px - cx, py - cy) < r);
+}
+// avalanche front: it starts behind the pad and runs along pad end → goal; s = how far it has come (-1 before it starts)
+function front() {
+  const v = L().aval; if (!v) return null;
+  const [x1, y1, x2, y2] = L().start, [gx, gy] = L().goal, l = Math.hypot(gx - x2, gy - y2), ux = (gx - x2) / l, uy = (gy - y2) / l;
+  const T = tHaz - v[0];
+  return { ox: x1 - ux * 70, oy: y1 - uy * 70, ux, uy, s: T > 0 ? v[1] * T + v[2] * T * T / 2 : -1 };
+}
+function moveAttackers(dt) {
+  const [cx, cy] = local(18, 20), vx = (car.w[0].vx + car.w[1].vx) / 2, vy = (car.w[0].vy + car.w[1].vy) / 2;
+  for (const e of eagles) {
+    if (tHaz < e.delay) continue;
+    const dx = cx - e.x, dy = cy - e.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, STEER * dt);
+    e.vx += (dx / d * e.speed - e.vx) * k; e.vy += (dy / d * e.speed - e.vy) * k;
+    e.x += e.vx * dt; e.y += e.vy * dt;
+  }
+  L().atk.forEach((a, i) => {
+    if (a[0] !== "canhao") return;
+    while (tHaz >= a[3] + shots[i] * a[4]) { // every shot that came due, aimed where the skier will be if it keeps going straight
+      let tx = cx, ty = cy;
+      for (let k = 0; k < 3; k++) { const fly = Math.hypot(tx - a[1], ty - a[2]) / a[5]; tx = cx + vx * fly; ty = cy + vy * fly; }
+      const dx = tx - a[1], dy = ty - a[2], d = Math.hypot(dx, dy) || 1;
+      balls.push({ x: a[1] + dx / d * 24, y: a[2] + dy / d * 24, vx: dx / d * a[5], vy: dy / d * a[5] });
+      shots[i]++;
+    }
+  });
+  for (const o of balls) { o.x += o.vx * dt; o.y += o.vy * dt; }
+  balls = balls.filter(o => o.x > -60 && o.x < W + 60 && o.y > -60 && o.y < H + 60);
+}
+const ITEM_R = 22, ITEMS = {
+  capacete: ["Capacete!", "gold"], turbo: ["Turbo 3 s!", "hazard"], lento: ["Lento 3 s…", "slow"], gelo: ["Tudo congelado 3 s!", "ice"],
+};
+function pickUp(probes) {
+  const pts = probes.concat(car.w.map(w => [w.x, w.y]));
+  L().items.forEach(([x, y, kind], i) => {
+    if (taken.has(i) || !pts.some(([px, py]) => Math.hypot(px - x, py - y) < ITEM_R)) return;
+    taken.add(i);
+    if (kind === "capacete") { fx.shield++; fx.helmet = true; } else fx[kind] = FX_T;
+    floaters.push({ x, y: y - 24, text: ITEMS[kind][0], key: ITEMS[kind][1], life: 1 });
+    if (!reduce) for (let k = 0; k < 18; k++) { const an = k / 18 * Math.PI * 2; parts.push({ x, y, vx: Math.cos(an) * 220, vy: Math.sin(an) * 220 - 120, life: .8, key: ITEMS[kind][1], r: an }); }
+  });
+}
+function arm() { // fresh per-run magic so every Play starts the same
+  fx = { turbo: 0, lento: 0, gelo: 0, grace: 0, shield: 0, helmet: false };
+  eagles = L().atk.filter(a => a[0] === "aguia").map(a => ({ x: a[1], y: a[2], delay: a[3], speed: a[4], vx: 0, vy: 0 }));
+  balls = []; shots = L().atk.map(() => 0); taken = new Set(); floaters = [];
+}
 function end(kind, title, text, boom = true) {
   state = kind;
   if (kind === "win") {
     if (!reduce) burst(...local(18, 20));
     done.add(lvl); try { localStorage.setItem("ladeira-ski-done", JSON.stringify([...done])); } catch {}
+    if (fx.helmet && !helmets.has(lvl)) {
+      helmets.add(lvl); toughen(); try { localStorage.setItem("ladeira-capacetes", JSON.stringify([...helmets])); } catch {}
+      text += ` Você levou o capacete mágico até a chegada: agora o esquiador aguenta pancada até ${ms(CRASH_V)} em todas as fases.`;
+    }
     renderLevels();
   } else if (boom) shatter();
   clearTimeout(endTimer);
@@ -413,11 +548,11 @@ function showCard(kind, title, text) {
 }
 function reset() {
   clearTimeout(endTimer); overlay.hidden = true;
-  state = "edit"; parts = []; rag = []; drops = []; stains = []; tRun = 0; spawn(); refresh();
+  state = "edit"; parts = []; rag = []; drops = []; stains = []; tRun = 0; spawn(); arm(); refresh();
 }
 function play() {
   if (state !== "edit") return reset();
-  spawn(); tRun = 0; tHaz = 0; best = Infinity; stale = 0; vNow = 0; state = "run"; refresh();
+  spawn(); arm(); tRun = 0; tHaz = 0; best = Infinity; stale = 0; vNow = 0; state = "run"; refresh();
 }
 function select(i) { lvl = i; cleared = null; rebuild(); reset(); renderLevels(); }
 function undo() {
@@ -430,9 +565,21 @@ function clearAll() {
   if (state !== "edit" || !drawings[lvl].length) return;
   cleared = drawings[lvl]; drawings[lvl] = []; rebuild(); refresh();
 }
+// ↔ something moves · ✦ a helmet is hidden here · ⛑ its helmet was carried to the finish
+const hasHelmet = l => (l.items || []).some(it => it[2] === "capacete");
+function optText(l, i) {
+  const moves = l.haz.some(h => h.length > 4) || l.fire || l.atk || l.aval;
+  const helm = hasHelmet(l) ? helmets.has(i) ? " ⛑" : " ✦" : "";
+  return `${i + 1}. ${l.name}${moves ? " ↔" : ""}${helm}${done.has(i) ? "  ✓" : ""}`;
+}
 function renderLevels() {
   const sel = $("#lvlSel");
-  sel.replaceChildren(...LEVELS.map((l, i) => new Option(`${i + 1}. ${l.name}${l.haz.some(h => h.length > 4) ? " ↔" : ""}${done.has(i) ? "  ✓" : ""}`, i)));
+  sel.replaceChildren(...SECTIONS.map(([from, title], k) => {
+    const g = document.createElement("optgroup"), to = SECTIONS[k + 1]?.[0] ?? LEVELS.length;
+    g.label = title;
+    for (let i = from; i < to; i++) g.append(new Option(optText(LEVELS[i], i), i));
+    return g;
+  }));
   sel.value = lvl;
 }
 $("#lvlSel").onchange = e => select(+e.target.value);
@@ -454,7 +601,8 @@ function refresh() {
   const [x1, y1, x2, y2] = L().start, drop = L().goal[1] - (y1 + y2) / 2;
   let ink = 0; for (const st of drawings[lvl]) for (let i = 1; i < st.length; i++) ink += Math.hypot(st[i][0] - st[i-1][0], st[i][1] - st[i-1][1]);
   $("#info").textContent = `Fase ${lvl + 1}/${LEVELS.length} · ${L().name}`;
-  $("#more").textContent = ` · desnível ${m(drop)} · pista ${m(ink)} · aguenta pancada até ${ms(CRASH_V)}`;
+  const hidden = LEVELS.filter(hasHelmet).length;
+  $("#more").textContent = ` · desnível ${m(drop)} · pista ${m(ink)} · aguenta pancada até ${ms(CRASH_V)} · capacetes ${helmets.size}/${hidden}`;
   const edit = state === "edit";
   $("#play").textContent = edit ? "▶ Play" : state === "run" ? "■ Parar" : "↺ Redesenhar";
   $("#undo").disabled = !edit || (!drawings[lvl].length && !cleared);
@@ -541,7 +689,9 @@ const css = n => cs.getPropertyValue("--" + n).trim();
 function draw() {
   cs = getComputedStyle(document.documentElement);
   const C = {};
-  for (const n of ["paper", "grid", "grid-major", "ink", "graphite", "muted", "car", "glass", "hazard", "ok", "skin", "pants", "blood"]) C[n] = css(n);
+  for (const n of ["paper", "grid", "grid-major", "ink", "graphite", "muted", "car", "glass", "hazard", "ok", "bad", "skin", "pants", "blood",
+    "fire", "gold", "ice", "slow", "snow", "snow-edge"]) C[n] = css(n);
+  const now = performance.now() / 1000;
   const k = cv.width / W, hair = W / (cv.clientWidth || W);
   ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.fillStyle = C.paper; ctx.fillRect(0, 0, W, H);
@@ -564,6 +714,8 @@ function draw() {
     ctx.fillStyle = hazard(C.hazard, C.graphite + "55"); ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = C.graphite; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
   }
+  drawFire(C, now);
+  for (const a of L().atk) if (a[0] === "canhao") drawCannon(C, a);
   // scale bar
   line([[24, H - 30], [124, H - 30]], C.muted, 2);
   line([[24, H - 36], [24, H - 24]], C.muted, 2); line([[124, H - 36], [124, H - 24]], C.muted, 2);
@@ -574,10 +726,10 @@ function draw() {
   const [gx, gy] = L().goal;
   ctx.fillStyle = C.ok; ctx.globalAlpha = .13; ctx.beginPath(); ctx.arc(gx, gy, GOAL_R, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
   ctx.save(); ctx.setLineDash([8, 7]); ctx.strokeStyle = C.ok; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(gx, gy, GOAL_R, 0, 7); ctx.stroke(); ctx.restore();
-  const fx = gx + 4, fy = gy - GOAL_R - 4;
-  line([[fx, fy], [fx, fy - 40]], C.graphite, 2.5);
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { ctx.fillStyle = (i + j) % 2 ? C.paper : C.graphite; ctx.fillRect(fx + i * 6, fy - 40 + j * 6, 6, 6); }
-  ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.5; ctx.strokeRect(fx, fy - 40, 24, 18);
+  const flx = gx + 4, fy = gy - GOAL_R - 4;
+  line([[flx, fy], [flx, fy - 40]], C.graphite, 2.5);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { ctx.fillStyle = (i + j) % 2 ? C.paper : C.graphite; ctx.fillRect(flx + i * 6, fy - 40 + j * 6, 6, 6); }
+  ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.5; ctx.strokeRect(flx, fy - 40, 24, 18);
   const right = gx > W - 160;
   label("CHEGADA", right ? gx - 6 : gx + 34, fy - 12, C.ok, 20, C.paper, right ? "right" : "left");
 
@@ -593,9 +745,14 @@ function draw() {
     label("a pista do INÍCIO até a CHEGADA", W / 2, H / 2 + 22, C.muted, 30, C.paper);
   }
 
+  L().items.forEach(([x, y, kind], i) => taken.has(i) || drawItem(C, x, y, kind, now));
   ctx.fillStyle = C.blood;
   for (const s of stains) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
-  if (rag.length) drawRag(C); else drawSkier(C);
+  if (rag.length) drawRag(C); else drawSkier(C, now);
+  for (const e of eagles) drawEagle(C, e, now);
+  for (const o of balls) drawBall(C, o);
+  drawAval(C, now);
+  if (fx?.gelo > 0) { ctx.fillStyle = C.ice; ctx.globalAlpha = .1; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   ctx.fillStyle = C.blood;
   for (const d of drops) { ctx.beginPath(); ctx.arc(d.x, d.y, 2, 0, 7); ctx.fill(); }
 
@@ -609,7 +766,103 @@ function draw() {
     ctx.font = `500 20px ${css("f-mono")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const t = `t ${sec(tRun)}   v ${ms(vNow)}`;
     ctx.lineWidth = 5; ctx.strokeStyle = C.paper; ctx.strokeText(t, W / 2, 26); ctx.fillStyle = C.graphite; ctx.fillText(t, W / 2, 26);
+    const on = [["turbo", "TURBO", "hazard"], ["lento", "LENTO", "slow"], ["gelo", "GELO", "ice"]].filter(([k]) => fx[k] > 0)
+      .map(([k, name, key]) => [`${name} ${sec(fx[k])}`, key]);
+    if (fx.shield) on.push([`CAPACETE ×${fx.shield}`, "gold"]);
+    ctx.font = `500 16px ${css("f-mono")}`;
+    on.forEach(([text, key], i) => { const y = 52 + i * 22; ctx.strokeText(text, W / 2, y); ctx.fillStyle = C[key]; ctx.fillText(text, W / 2, y); });
   }
+  for (const f of floaters) { ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 2)); label(f.text, f.x, f.y, C[f.key], 24, C.paper); }
+  ctx.globalAlpha = 1;
+}
+// flame vent: nozzle on one side of its rect, flames across it while lit, a sputter just before
+function drawFire(C, now) {
+  for (const f of L().fire) {
+    const [x, y, w, h, , , , side] = f, on = lit(f), hot = warm(f);
+    ctx.save(); ctx.setLineDash([5, 6]); ctx.strokeStyle = on ? C.fire : C.muted; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h); ctx.restore();
+    ctx.save(); // local frame: nozzle along y = 0, flames toward +y
+    if (side === 0) ctx.transform(1, 0, 0, -1, x, y + h); else if (side === 1) ctx.transform(1, 0, 0, 1, x, y);
+    else if (side === 2) ctx.transform(0, 1, 1, 0, x, y); else ctx.transform(0, 1, -1, 0, x + w, y);
+    const across = side < 2 ? w : h, along = side < 2 ? h : w, n = Math.max(2, Math.round(across / 18)), hw = across / n * .7;
+    if (on || hot) for (const [key, sc] of [["fire", 1], ["hazard", .55]]) {
+      ctx.fillStyle = C[key]; ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const cx = (i + .5) * across / n, len = (on ? along - 10 : along * .16) * (.78 + .22 * Math.sin(now * 15 + i * 1.7)) * sc, ww = hw * sc;
+        ctx.moveTo(cx - ww, 10); ctx.quadraticCurveTo(cx - ww, 10 + len * .6, cx + Math.sin(now * 9 + i) * ww * .5, 10 + len);
+        ctx.quadraticCurveTo(cx + ww, 10 + len * .6, cx + ww, 10);
+      }
+      ctx.fill();
+    }
+    ctx.fillStyle = C.graphite; ctx.fillRect(0, 0, across, 10);
+    ctx.fillStyle = on || hot ? C.fire : C.muted; for (let i = 0; i < n; i++) ctx.fillRect((i + .5) * across / n - 3, 7, 6, 3);
+    ctx.restore();
+  }
+}
+function drawCannon(C, a) {
+  const [cx, cy] = car ? local(18, 20) : [W / 2, H / 2], an = Math.atan2(cy - a[2], cx - a[1]);
+  ctx.save(); ctx.translate(a[1], a[2]);
+  ctx.save(); ctx.rotate(an); ctx.fillStyle = C.graphite; ctx.fillRect(0, -6, 26, 12); ctx.fillStyle = C.fire; ctx.fillRect(22, -6, 4, 12); ctx.restore();
+  ctx.fillStyle = C.graphite; ctx.beginPath(); ctx.arc(0, 4, 14, Math.PI, 0); ctx.lineTo(16, 14); ctx.lineTo(-16, 14); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawBall(C, o) {
+  const sp = Math.hypot(o.vx, o.vy) || 1;
+  for (let k = 3; k >= 1; k--) { ctx.globalAlpha = .18 * (4 - k); ctx.fillStyle = C.fire; ctx.beginPath(); ctx.arc(o.x - o.vx / sp * k * 9, o.y - o.vy / sp * k * 9, 10 - k * 2, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1; ctx.fillStyle = C.fire; ctx.beginPath(); ctx.arc(o.x, o.y, 10, 0, 7); ctx.fill();
+  ctx.fillStyle = C.hazard; ctx.beginPath(); ctx.arc(o.x + 2, o.y - 2, 5, 0, 7); ctx.fill();
+}
+function drawEagle(C, e, now) {
+  const hunting = tHaz >= e.delay && state !== "edit", flap = Math.sin(now * (hunting ? 20 : 5) + e.delay * 3);
+  ctx.save(); ctx.translate(e.x, e.y + (hunting ? 0 : Math.sin(now * 2.5) * 3)); ctx.scale(e.vx < -1 ? -1 : 1, 1);
+  ctx.fillStyle = C.graphite; ctx.strokeStyle = C.graphite; ctx.lineWidth = 2;
+  for (const s of [1, -1]) { // wings
+    ctx.beginPath(); ctx.moveTo(-4, 0); ctx.quadraticCurveTo(-8 * s, -14 * flap * s - 4, -22, -10 * flap); ctx.quadraticCurveTo(-10, 0, 4, 2); ctx.fill();
+  }
+  ctx.beginPath(); ctx.ellipse(0, 2, 12, 6, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-11, 2); ctx.lineTo(-19, -2); ctx.lineTo(-19, 7); ctx.closePath(); ctx.fill(); // tail
+  ctx.fillStyle = C.paper; ctx.beginPath(); ctx.arc(12, -3, 5.5, 0, 7); ctx.fill(); ctx.stroke(); // white head
+  ctx.fillStyle = C.hazard; ctx.beginPath(); ctx.moveTo(16, -4); ctx.lineTo(23, -1); ctx.lineTo(16, 1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = hunting ? C.bad : C.graphite; ctx.beginPath(); ctx.arc(13.5, -4.5, 1.6, 0, 7); ctx.fill();
+  ctx.restore();
+}
+// avalanche: a wall of snow behind the front line; before it starts, a marker shows where it will come from
+function drawAval(C, now) {
+  const F = front(); if (!F) return;
+  const px = -F.uy, py = F.ux;
+  if (state === "edit" || F.s < 0) {
+    const [x1, y1, x2, y2] = L().start;
+    label(`AVALANCHE em ${sec(L().aval[0])}`, (x1 + x2) / 2 + 10, Math.max(y1, y2) + 46, C.bad, 18, C.paper);
+    return;
+  }
+  const cx = F.ox + F.ux * F.s, cy = F.oy + F.uy * F.s, big = 3000;
+  const puffs = new Path2D(); // lumpy, rolling edge
+  for (let k = -70; k <= 70; k++) {
+    const q = k * 20, r = 15 + 7 * Math.sin(k * 1.9 + now * 7), bx = cx + px * q, by = cy + py * q;
+    if (bx < -40 || bx > W + 40 || by < -40 || by > H + 40) continue;
+    puffs.moveTo(bx + r, by); puffs.arc(bx, by, r, 0, 7);
+  }
+  ctx.strokeStyle = C["snow-edge"]; ctx.lineWidth = 4; ctx.stroke(puffs); // rim first, so only the outer edge survives the fill
+  ctx.fillStyle = C.snow; ctx.fill(puffs);
+  ctx.beginPath(); ctx.moveTo(cx + px * big, cy + py * big); ctx.lineTo(cx - px * big, cy - py * big);
+  ctx.lineTo(cx - px * big - F.ux * big, cy - py * big - F.uy * big); ctx.lineTo(cx + px * big - F.ux * big, cy + py * big - F.uy * big); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = C.graphite; // tumbling rocks in the snow
+  for (let k = -8; k <= 8; k++) { const q = k * 85 + 30 * Math.sin(now * 3 + k), d = 30 + 25 * (((k * 7 + 3) % 4 + 4) % 4); ctx.beginPath(); ctx.arc(cx + px * q - F.ux * d, cy + py * q - F.uy * d, 4 + (k & 3), 0, 7); ctx.fill(); }
+}
+function drawItem(C, x, y, kind, now) {
+  const key = ITEMS[kind][1], pulse = 1 + .15 * Math.sin(now * 5 + x * .01);
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = C[key]; ctx.globalAlpha = .22; ctx.beginPath(); ctx.arc(0, 0, 21 * pulse, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = C[key]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 15, 0, 7); ctx.stroke();
+  if (kind === "capacete") for (let i = 0; i < 4; i++) { // sparkles: it is magic
+    const an = now * 2 + i * Math.PI / 2; ctx.fillStyle = C.gold; ctx.fillRect(Math.cos(an) * 24 - 2, Math.sin(an) * 24 - 2, 4, 4);
+  }
+  ctx.fillStyle = C[key]; ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.5; ctx.beginPath();
+  if (kind === "capacete") { ctx.arc(0, 4, 10, Math.PI, 0); ctx.lineTo(12, 6); ctx.lineTo(-10, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = C.glass; ctx.fillRect(2, -1, 8, 4); ctx.strokeRect(2, -1, 8, 4); }
+  else if (kind === "turbo") { ctx.moveTo(3, -12); ctx.lineTo(-7, 2); ctx.lineTo(-1, 2); ctx.lineTo(-4, 12); ctx.lineTo(7, -3); ctx.lineTo(1, -3); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  else if (kind === "lento") { ctx.moveTo(-11, 7); ctx.lineTo(10, 7); ctx.quadraticCurveTo(12, 1, 7, 2); ctx.lineTo(-8, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-1, -1, 7, 0, 7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(-1, -1, 3.5, 0, 5); ctx.stroke(); }
+  else { ctx.strokeStyle = C[key]; ctx.lineWidth = 2.5; for (let i = 0; i < 3; i++) { const an = i * Math.PI / 3, c = Math.cos(an) * 11, s = Math.sin(an) * 11; ctx.moveTo(-c, -s); ctx.lineTo(c, s); } ctx.stroke(); }
+  ctx.restore();
 }
 // one body part as a thick outlined stroke between a and b (coords in the current transform)
 function limb(C, p, ax, ay, bx, by) {
@@ -623,9 +876,10 @@ function limb(C, p, ax, ay, bx, by) {
   if (p.k !== "graphite") { ctx.strokeStyle = C.graphite; ctx.lineWidth = p.w + 2.4; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
   ctx.strokeStyle = C[p.k]; ctx.lineWidth = p.w; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
 }
-function drawSkier(C) {
+function drawSkier(C, now = 0) {
   const a = car.w[0], f = basis();
-  ctx.save(); ctx.translate(a.x, a.y); ctx.transform(f.ux, f.uy, -f.nx, -f.ny, 0, 0); // local: x forward, y down
+  ctx.save(); ctx.translate(a.x, a.y);
+  if (fx?.grace > 0 && Math.floor(now * 12) % 2) ctx.globalAlpha = .35; // just lost the helmet ctx.transform(f.ux, f.uy, -f.nx, -f.ny, 0, 0); // local: x forward, y down
   for (const p of PARTS) {
     if (p.ski) { // ski with an upturned tip
       ctx.strokeStyle = C.graphite; ctx.lineWidth = p.w; ctx.lineCap = "round";
@@ -634,9 +888,14 @@ function drawSkier(C) {
     }
     limb(C, p, p.a[0], p.a[1], p.b[0], p.b[1]);
   }
-  // beanie and goggles
-  ctx.fillStyle = C.car; ctx.beginPath(); ctx.arc(25, -38, 5.6, Math.PI * 1.05, Math.PI * 1.95); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.arc(24, -45.5, 2.2, 0, 7); ctx.fill();
+  // beanie (or the magic helmet) and goggles
+  if (fx?.shield > 0) {
+    ctx.fillStyle = C.gold; ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(25, -38, 7.2, Math.PI * .95, Math.PI * 2.05); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.fillStyle = C.car; ctx.beginPath(); ctx.arc(25, -38, 5.6, Math.PI * 1.05, Math.PI * 1.95); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(24, -45.5, 2.2, 0, 7); ctx.fill();
+  }
   ctx.fillStyle = C.glass; ctx.strokeStyle = C.graphite; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.roundRect(26, -39.5, 5, 3, 1); ctx.fill(); ctx.stroke();
   ctx.restore();
@@ -656,6 +915,8 @@ function loop(t) {
   if (drops.length) stepDrops(dt);
   for (const p of parts) { p.vy += G * .6 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += dt * 8; p.life -= dt * .7; }
   parts = parts.filter(p => p.life > 0);
+  for (const f of floaters) { f.y -= 40 * dt; f.life -= dt * .6; }
+  floaters = floaters.filter(f => f.life > 0);
   draw();
   requestAnimationFrame(loop);
 }
