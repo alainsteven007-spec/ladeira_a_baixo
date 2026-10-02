@@ -11,7 +11,9 @@ Jogo de navegador com física de gravidade. Você desenha a pista na montanha co
 
 ## Fases
 
-São 16 fases. Da 7 em diante os obstáculos se movem. A cada Play eles recomeçam da mesma posição, então dá para acertar o tempo mudando o formato da pista.
+São 36 fases. Da 7 à 16 os obstáculos se movem. Da 17 à 21 elas voltam a ser paradas, mas com formatos novos: túnel, vale, contramão (descida da direita para a esquerda), montanha-russa (a chegada fica no alto e você tem que descer antes para pegar embalo) e escadaria. Da 22 à 36 tudo se move de novo: portas de correr, pistões, avalanche, elevadores, fresta móvel e o grande final. No seletor, as fases com obstáculos móveis têm ↔.
+
+A cada Play os obstáculos recomeçam da mesma posição, então dá para acertar o tempo mudando o formato da pista.
 
 ## Em pé ou deitado
 
