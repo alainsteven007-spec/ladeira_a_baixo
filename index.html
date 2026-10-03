@@ -254,7 +254,7 @@ const LEVELS = [
 const SECTIONS = [[0, "Clássicas"], [16, "Novas formas"], [36, "🔥 Fogo"], [40, "🏔 Avalanche"], [44, "🦅 Ataque"], [48, "☠ Tudo junto"]];
 // one magic item per level, [x, y, kind] in portrait coordinates (null: none yet); kinds are in MAGIC
 const MAGIC_SPOTS = LEVELS.map(() => null);
-Object.assign(MAGIC_SPOTS, { 0: [330, 720, "bolha"], 1: [270, 560, "pena"], 2: [290, 880, "bolha"], 3: [170, 260, "capacete"], 4: [370, 760, "bolha"], 5: [480, 500, "pena"], 6: [390, 800, "bolha"], 7: [400, 330, "capacete"], 8: [440, 520, "bolha"], 9: [570, 400, "pena"], 10: [290, 880, "bolha"], 11: [410, 180, "capacete"], 12: [350, 680, "bolha"], 13: [330, 720, "pena"], 14: [330, 720, "capacete"], 15: [450, 430, "bolha"], 16: [390, 900, "pena"], 17: [560, 710, "bolha"], 18: [150, 590, "capacete"], 19: [550, 300, "dragao"], 20: [480, 700, "bolha"], 21: [470, 200, "pena"], 22: [410, 180, "bolha"], 23: [410, 180, "capacete"], 24: [400, 520, "bolha"], 25: [390, 840, "pena"], 26: [410, 180, "capacete"], 27: [470, 200, "bolha"], 28: [390, 900, "pena"], 29: [470, 280, "bolha"], 30: [470, 880, "capacete"], 31: [400, 148, "bolha"], 32: [297, 222, "pena"], 33: [420, 400, "capacete"], 34: [210, 440, "bolha"], 35: [371, 549, "dragao"], 36: [550, 580, "brasa"], 37: [450, 300, "brasa"], 38: [550, 300, "brasa"], 39: [420, 400, "cachecol"], 40: [250, 300, "cachecol"], 41: [330, 715, "cachecol"], 42: [341, 830, "cachecol"], 43: [350, 300, "apito"], 44: [650, 660, "brasa"], 45: [330, 300, "apito"], 46: [560, 380, "brasa"], 47: [290, 740, "cachecol"], 48: [400, 500, "capacete"], 49: [470, 700, "dragao"] });
+Object.assign(MAGIC_SPOTS, { 0: [330, 720, "bolha"], 1: [270, 560, "pena"], 2: [290, 880, "bolha"], 3: [184, 246, "capacete"], 4: [370, 760, "bolha"], 5: [480, 500, "pena"], 6: [390, 800, "bolha"], 7: [400, 330, "capacete"], 8: [440, 520, "bolha"], 9: [570, 400, "pena"], 10: [290, 880, "bolha"], 11: [410, 180, "capacete"], 12: [350, 680, "bolha"], 13: [330, 720, "pena"], 14: [330, 720, "capacete"], 15: [450, 430, "bolha"], 16: [390, 900, "pena"], 17: [560, 710, "bolha"], 18: [150, 590, "capacete"], 19: [550, 300, "dragao"], 20: [480, 700, "bolha"], 21: [470, 200, "pena"], 22: [410, 180, "bolha"], 23: [410, 180, "capacete"], 24: [400, 520, "bolha"], 25: [390, 840, "pena"], 26: [410, 180, "capacete"], 27: [470, 200, "bolha"], 28: [390, 900, "pena"], 29: [470, 280, "bolha"], 30: [470, 880, "capacete"], 31: [400, 148, "bolha"], 32: [335, 222, "pena"], 33: [420, 400, "capacete"], 34: [210, 440, "bolha"], 35: [371, 549, "dragao"], 36: [550, 580, "brasa"], 37: [450, 300, "brasa"], 38: [550, 300, "brasa"], 39: [420, 400, "cachecol"], 40: [250, 300, "cachecol"], 41: [330, 715, "cachecol"], 42: [341, 830, "cachecol"], 43: [350, 300, "apito"], 44: [650, 660, "brasa"], 45: [330, 300, "apito"], 46: [560, 380, "brasa"], 47: [290, 740, "cachecol"], 48: [400, 500, "capacete"], 49: [470, 700, "dragao"] });
 let land = false; // sideways play
 const LAND_PACE = .7;
 const levelCache = {};
@@ -396,24 +396,56 @@ const fmt = (v, d = 1) => v.toFixed(d).replace(".", ",");
 const m = v => fmt(v / PX) + " m", ms = v => fmt(v / PX) + " m/s", sec = t => fmt(t) + " s";
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
+// Rails: while a contact rides the track — touching it, or hopping within HOVER px of it — it only feels the track
+// it is on (the segments joined to it within RAIL px along the line), so a drawing that crosses itself works like a
+// roller-coaster loop: the strands pass at different depths. Flying farther off, or off the end of a line, it feels
+// every segment again, so it can fall onto the bottom of the loop or land on another stroke.
+const RAIL = 60, HOVER = 40;
 function rebuild() {
   segs = [];
   const add = (x1, y1, x2, y2) => {
     const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
     if (l2 < 1e-6) return;
-    segs.push({ x1, y1, dx, dy, l2, minx: Math.min(x1, x2) - R, maxx: Math.max(x1, x2) + R, miny: Math.min(y1, y2) - R, maxy: Math.max(y1, y2) + R });
+    segs.push({ id: segs.length, x1, y1, dx, dy, l2, len: Math.sqrt(l2), minx: Math.min(x1, x2) - R, maxx: Math.max(x1, x2) + R, miny: Math.min(y1, y2) - R, maxy: Math.max(y1, y2) + R });
   };
   add(...L().start);
   for (const st of drawings[lvl]) for (let i = 1; i < st.length; i++) add(st[i-1][0], st[i-1][1], st[i][0], st[i][1]);
+  // segments are joined where they share an end point (strokes snap onto the pad and onto each other's ends)
+  const at = new Map(), key = (x, y) => Math.round(x * 2) + "," + Math.round(y * 2);
+  for (const sg of segs) for (const k of [key(sg.x1, sg.y1), key(sg.x1 + sg.dx, sg.y1 + sg.dy)]) (at.get(k) || at.set(k, []).get(k)).push(sg.id);
+  for (const sg of segs) {
+    const head = at.get(key(sg.x1, sg.y1)).filter(j => j !== sg.id), tail = at.get(key(sg.x1 + sg.dx, sg.y1 + sg.dy)).filter(j => j !== sg.id);
+    sg.next = [...new Set([...head, ...tail])]; sg.headLinked = head.length > 0; sg.tailLinked = tail.length > 0;
+  }
+  for (const sg of segs) { // everything within RAIL along the line, both ways
+    const dist = new Map([[sg.id, 0]]), todo = [sg.id];
+    while (todo.length) {
+      const c = todo.shift(), dc = dist.get(c);
+      for (const j of segs[c].next) { const d = dc + segs[j].len; if (d <= RAIL && !(dist.get(j) <= d)) { dist.set(j, d); todo.push(j); } }
+    }
+    sg.near = [...dist.keys()].map(j => segs[j]);
+  }
+}
+// what a contact can feel this substep: its rail if it is riding the track, else everything
+const feel = w => w.on && w.rail != null && segs[w.rail] ? segs[w.rail].near : segs;
+function railHold(w) { // off the snow but still just over its own line (a hop, a fast curve): keep the rail
+  const s0 = segs[w.rail]; if (!s0) return false;
+  let bd = Infinity, bs = null, bt = 0;
+  for (const s of s0.near) {
+    const t = clamp(((w.x - s.x1) * s.dx + (w.y - s.y1) * s.dy) / s.l2, 0, 1), d = Math.hypot(w.x - s.x1 - s.dx * t, w.y - s.y1 - s.dy * t);
+    if (d < bd) { bd = d; bs = s; bt = t; }
+  }
+  if (bd > HOVER || bt <= 0 && !bs.headLinked || bt >= 1 && !bs.tailLinked) return false; // flew off, or past the end of the line
+  w.rail = bs.id; return true;
 }
 function closest(px, py, s) {
   const t = clamp(((px - s.x1) * s.dx + (py - s.y1) * s.dy) / s.l2, 0, 1);
   return [s.x1 + s.dx * t, s.y1 + s.dy * t];
 }
 // nearest track point within r of (px,py): [qx, qy, dist] or null
-function touch(px, py, r) {
+function touch(px, py, r, list = segs) {
   let hit = null;
-  for (const s of segs) {
+  for (const s of list) {
     if (px < s.minx - r || px > s.maxx + r || py < s.miny - r || py > s.maxy + r) continue;
     const [qx, qy] = closest(px, py, s), d = Math.hypot(px - qx, py - qy);
     if (d < r && (!hit || d < hit[2])) hit = [qx, qy, d];
@@ -425,7 +457,7 @@ function spawn() {
   const [x1, y1, x2, y2] = L().start, l = Math.hypot(x2 - x1, y2 - y1), dx = (x2 - x1) / l, dy = (y2 - y1) / l;
   let nx = dy, ny = -dx; if (ny > 0) { nx = -nx; ny = -ny; }
   const ax = x1 + dx * 16 + nx * (R + .5), ay = y1 + dy * 16 + ny * (R + .5);
-  car = { s: Math.sign(dx) || 1, w: [{ x: ax, y: ay, vx: 0, vy: 0 }, { x: ax + dx * AXLE, y: ay + dy * AXLE, vx: 0, vy: 0 }] };
+  car = { s: Math.sign(dx) || 1, w: [{ x: ax, y: ay, vx: 0, vy: 0, rail: 0, on: true }, { x: ax + dx * AXLE, y: ay + dy * AXLE, vx: 0, vy: 0, rail: 0, on: true }] };
 }
 function basis() {
   const [a, b] = car.w, l = Math.hypot(b.x - a.x, b.y - a.y) || 1, ux = (b.x - a.x) / l, uy = (b.y - a.y) / l;
@@ -439,13 +471,13 @@ function link(a, b) {
   a.x += dx * k; a.y += dy * k; b.x -= dx * k; b.y -= dy * k;
 }
 function collide(w) {
-  for (const s of segs) {
+  for (const s of feel(w)) {
     if (w.x < s.minx || w.x > s.maxx || w.y < s.miny || w.y > s.maxy) continue;
     const [qx, qy] = closest(w.x, w.y, s);
     let ex = w.x - qx, ey = w.y - qy, d = Math.hypot(ex, ey);
     if (d >= R) continue;
     if (d < 1e-4) { const l = Math.sqrt(s.l2); ex = s.dy / l; ey = -s.dx / l; d = 0; } else { ex /= d; ey /= d; }
-    w.x += ex * (R - d); w.y += ey * (R - d); w.c = true; w.nx = ex; w.ny = ey;
+    w.x += ex * (R - d); w.y += ey * (R - d); w.c = true; w.nx = ex; w.ny = ey; w.rail = s.id;
     const vn = w.vx * ex + w.vy * ey; // approach speed before this step
     if (vn < -100) impact = true;
     if (vn < -CRASH_V && state === "run") hurt("Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. {quem} aguenta até ${ms(CRASH_V)}.`, "impact");
@@ -461,7 +493,7 @@ function physics(dt) {
     for (const w of car.w) {
       w.vy += G * h;
       const sp = Math.hypot(w.vx, w.vy); if (sp > VMAX) { w.vx *= VMAX / sp; w.vy *= VMAX / sp; }
-      w.ox = w.x; w.oy = w.y; w.x += w.vx * h; w.y += w.vy * h; w.c = false;
+      w.ox = w.x; w.oy = w.y; w.x += w.vx * h; w.y += w.vy * h; w.on = w.c !== false || railHold(w); w.c = false;
     }
     for (let it = 0; it < 3; it++) { link(a, b); collide(a); collide(b); }
     if (state !== "run") return;
@@ -503,7 +535,8 @@ function update(dt) {
   physics(dt);
   if (state !== "run") return;
   const [a, b] = car.w, probes = VEH().probes.map(p => local(...p));
-  if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo de {quem} bateu na neve. Curvas fechadas e lombadas causam esse tombo.", "impact")) return;
+  const body = car.w.every(w => w.on || w.c) ? [...new Set([...feel(a), ...feel(b)])] : segs; // on the rails the body ignores crossing strands too
+  if (probes.some(([px, py]) => touch(px, py, 2.5, body)) && hurt("Caiu de cabeça!", "O corpo de {quem} bateu na neve. Curvas fechadas e lombadas causam esse tombo.", "impact")) return;
   if (!fx.gelo) { tHaz += dt; moveAttackers(dt); } // the ice charm stops the world clock
   for (const d of dangers()) if (hits(d, probes)) { if (hurt(...WHY[d.why])) return; break; }
   const F = front();

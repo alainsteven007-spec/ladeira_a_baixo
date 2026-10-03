@@ -8,6 +8,7 @@ Jogo de navegador com física de gravidade. Você desenha a pista na montanha co
 - **Play** (ou Espaço) solta o esquiador. **Desfazer** (Z) apaga o último traço e **Limpar** apaga tudo.
 - O esquiador quebra se bater com o corpo na neve, se pancar a mais de 7,5 m/s, se encostar numa área listrada ou se cair do mapa.
 - Curvas fechadas e lombadas fazem ele voar: desenhe curvas suaves.
+- Dá para desenhar um laço de montanha-russa. Enquanto o esquiador está na pista, a parte do desenho que cruza o caminho dele passa por cima ou por baixo, sem bater. Com velocidade, ele dá a volta de cabeça para baixo. Sem velocidade, ele se solta perto do topo e cai. Para entrar no laço com embalo, a descida até ele precisa ser suave: uma queda brusca logo depois do INÍCIO faz o esquiador decolar.
 
 ## Personagem e transporte
 
