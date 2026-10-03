@@ -448,7 +448,7 @@ function collide(w) {
     w.x += ex * (R - d); w.y += ey * (R - d); w.c = true; w.nx = ex; w.ny = ey;
     const vn = w.vx * ex + w.vy * ey; // approach speed before this step
     if (vn < -100) impact = true;
-    if (vn < -CRASH_V && state === "run") hurt("Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. O esquiador aguenta até ${ms(CRASH_V)}.`, "impact");
+    if (vn < -CRASH_V && state === "run") hurt("Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. {quem} aguenta até ${ms(CRASH_V)}.`, "impact");
   }
 }
 // ½v² + g·height for both contacts (per unit mass; y grows downward)
@@ -490,12 +490,12 @@ function physics(dt) {
     }
   }
 }
-const WHY = { // title, text, what kind of harm (a magic guard can cancel it)
-  haz: ["Bateu na pedra!", "O esquiador encostou na área listrada. Desvie dela com a pista.", "haz"],
+const WHY = { // {quem} = the chosen character's name, filled in when the card shows; title, text, what kind of harm (a magic guard can cancel it)
+  haz: ["Bateu na pedra!", "{quem} encostou na área listrada. Desvie dela com a pista.", "haz"],
   fire: ["Queimou!", "Passou pelo fogo aceso. As chamas acendem e apagam: acerte o tempo mudando a pista.", "fire"],
-  aguia: ["A águia pegou!", "A águia mergulhou no esquiador. Desça mais rápido que ela, ou passe longe do ninho.", "aguia"],
-  bola: ["Bola de fogo!", "O canhão mira onde o esquiador vai estar se seguir reto. Faça curvas para a bola errar.", "fire"],
-  aval: ["Soterrado!", "A avalanche alcançou o esquiador. Desenhe uma descida mais rápida.", "aval"],
+  aguia: ["A águia pegou!", "A águia mergulhou em {quem}. Desça mais rápido que ela, ou passe longe do ninho.", "aguia"],
+  bola: ["Bola de fogo!", "O canhão mira onde {quem} vai estar se seguir reto. Faça curvas para a bola errar.", "fire"],
+  aval: ["Soterrado!", "A avalanche alcançou {quem}. Desenhe uma descida mais rápida.", "aval"],
 };
 function update(dt) {
   tRun += dt;
@@ -503,19 +503,19 @@ function update(dt) {
   physics(dt);
   if (state !== "run") return;
   const [a, b] = car.w, probes = VEH().probes.map(p => local(...p));
-  if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo do esquiador bateu na neve. Curvas fechadas e lombadas derrubam ele.", "impact")) return;
+  if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo de {quem} bateu na neve. Curvas fechadas e lombadas causam esse tombo.", "impact")) return;
   if (!fx.gelo) { tHaz += dt; moveAttackers(dt); } // the ice charm stops the world clock
   for (const d of dangers()) if (hits(d, probes)) { if (hurt(...WHY[d.why])) return; break; }
   const F = front();
   if (F && F.s > 0 && probes.concat(car.w.map(w => [w.x, w.y])).some(([px, py]) => (px - F.ox) * F.ux + (py - F.oy) * F.uy < F.s) && hurt(...WHY.aval)) return;
   pickUp(probes);
-  if (car.w.some(w => w.y > H + 80 || w.x < -80 || w.x > W + 80)) return end("crash", "Despencou", "O esquiador saiu da pista e caiu montanha abaixo.");
+  if (car.w.some(w => w.y > H + 80 || w.x < -80 || w.x > W + 80)) return end("crash", "Despencou", "{quem} saiu da pista e caiu montanha abaixo.");
   vNow = (Math.hypot(a.vx, a.vy) + Math.hypot(b.vx, b.vy)) / 2;
   const [cx, cy] = local(...VEH().mid), [gx, gy] = L().goal, dist = Math.hypot(cx - gx, cy - gy);
   if (dist < GOAL_R) return end("win", "Chegou inteiro!", `Levou ${sec(tRun)} e cruzou a chegada a ${ms(vNow)}.`);
   if (dist < best - 2) { best = dist; stale = 0; } else stale += dt; // stopped or rocking in a valley = no new closest approach
-  if (stale > 3.5) return end("crash", "Não chegou lá", "O esquiador perdeu o embalo. Só a gravidade empurra: a chegada precisa ficar mais baixa que o ponto mais alto do caminho.", false);
-  if (tRun > T_MAX) return end("crash", "Tempo esgotado", `Passaram ${T_MAX} s e o esquiador não chegou.`, false);
+  if (stale > 3.5) return end("crash", "Não chegou lá", "{quem} perdeu o embalo. Só a gravidade empurra: a chegada precisa ficar mais baixa que o ponto mais alto do caminho.", false);
+  if (tRun > T_MAX) return end("crash", "Tempo esgotado", `Passaram ${T_MAX} s e {quem} não chegou.`, false);
 }
 // a hit ends the run unless magic cancels it: a guard for that kind of harm, or a charge of bubble/helmet
 // (after a charge the rider gets a moment to get clear)
@@ -707,8 +707,9 @@ const overlay = $("#overlay");
 function showCard(kind, title, text) {
   const last = lvl === LEVELS.length - 1;
   $("#card").dataset.kind = kind;
-  $("#cTitle").textContent = title;
-  $("#cText").textContent = text + (kind === "win" && last ? " Você venceu todas as fases!" : "");
+  const who = s => s.replaceAll("{quem}", CHAR().name);
+  $("#cTitle").textContent = who(title);
+  $("#cText").textContent = who(text) + (kind === "win" && last ? " Você venceu todas as fases!" : "");
   $("#next").hidden = !(kind === "win" && !last);
   overlay.hidden = false;
   ($("#next").hidden ? $("#retry") : $("#next")).focus();
