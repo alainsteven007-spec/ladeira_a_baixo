@@ -254,7 +254,7 @@ const LEVELS = [
 const SECTIONS = [[0, "Clássicas"], [16, "Novas formas"], [36, "🔥 Fogo"], [40, "🏔 Avalanche"], [44, "🦅 Ataque"], [48, "☠ Tudo junto"]];
 // one magic item per level, [x, y, kind] in portrait coordinates (null: none yet); kinds are in MAGIC
 const MAGIC_SPOTS = LEVELS.map(() => null);
-Object.assign(MAGIC_SPOTS, { 0: [330, 720, "bolha"], 1: [270, 560, "pena"], 2: [290, 880, "bolha"], 4: [370, 760, "bolha"], 9: [570, 400, "pena"], 10: [290, 880, "bolha"], 11: [410, 180, "capacete"], 12: [350, 680, "bolha"], 13: [330, 720, "pena"], 14: [330, 720, "capacete"], 16: [390, 900, "pena"], 25: [390, 840, "pena"], 26: [410, 180, "capacete"], 27: [470, 200, "bolha"], 28: [390, 900, "pena"], 29: [470, 280, "bolha"], 30: [470, 880, "capacete"], 33: [420, 400, "capacete"], 34: [210, 440, "bolha"], 36: [550, 580, "brasa"] });
+Object.assign(MAGIC_SPOTS, { 0: [330, 720, "bolha"], 1: [270, 560, "pena"], 2: [290, 880, "bolha"], 4: [370, 760, "bolha"], 9: [570, 400, "pena"], 10: [290, 880, "bolha"], 11: [410, 180, "capacete"], 12: [350, 680, "bolha"], 13: [330, 720, "pena"], 14: [330, 720, "capacete"], 16: [390, 900, "pena"], 25: [390, 840, "pena"], 26: [410, 180, "capacete"], 27: [470, 200, "bolha"], 28: [390, 900, "pena"], 29: [470, 280, "bolha"], 30: [470, 880, "capacete"], 31: [148, 623, "bolha"], 32: [297, 222, "pena"], 33: [420, 400, "capacete"], 34: [210, 440, "bolha"], 36: [550, 580, "brasa"], 37: [450, 300, "brasa"], 38: [550, 300, "brasa"] });
 let land = false; // sideways play
 const LAND_PACE = .7;
 const levelCache = {};
