@@ -66,16 +66,16 @@ function draw() {
   ctx.font = `500 13px ${css("f-mono")}`; ctx.fillStyle = C.muted; ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.fillText("1 m    g = 9,81 m/s²", 34, H - 48);
 
-  // goal
+  // goal: a dashed circle with the flag planted in its middle (aim for the flag and you are in); label underneath
   const [gx, gy] = L().goal;
   ctx.fillStyle = C.ok; ctx.globalAlpha = .13; ctx.beginPath(); ctx.arc(gx, gy, GOAL_R, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
   ctx.save(); ctx.setLineDash([8, 7]); ctx.strokeStyle = C.ok; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(gx, gy, GOAL_R, 0, 7); ctx.stroke(); ctx.restore();
-  const flx = gx + 4, fy = gy - GOAL_R - 4;
-  line([[flx, fy], [flx, fy - 40]], C.graphite, 2.5);
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { ctx.fillStyle = (i + j) % 2 ? C.paper : C.graphite; ctx.fillRect(flx + i * 6, fy - 40 + j * 6, 6, 6); }
-  ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.5; ctx.strokeRect(flx, fy - 40, 24, 18);
-  const right = gx > W - 160;
-  label("CHEGADA", right ? gx - 6 : gx + 34, fy - 12, C.ok, 20, C.paper, right ? "right" : "left");
+  const flx = gx - 2, fy = gy + 14;
+  line([[flx, fy], [flx, fy - 46]], C.graphite, 2.5);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { ctx.fillStyle = (i + j) % 2 ? C.paper : C.graphite; ctx.fillRect(flx + i * 6, fy - 46 + j * 6, 6, 6); }
+  ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.5; ctx.strokeRect(flx, fy - 46, 24, 18);
+  const below = gy + GOAL_R + 18 < H - 4;
+  label("CHEGADA", gx, below ? gy + GOAL_R + 16 : gy - GOAL_R - 14, C.ok, 20, C.paper);
 
   // start pad
   const [x1, y1, x2, y2] = L().start;
@@ -83,7 +83,7 @@ function draw() {
   label("INÍCIO", (x1 + x2) / 2, Math.max(16, Math.min(y1, y2) - 72), C.graphite, 20, C.paper);
 
   for (const st of drawings[lvl]) line(st, C.ink, 4);
-  if (stroke) line(stroke, C.ink, 4);
+  if (strokeShape) line(strokeShape, C.ink, 4);
   if (state === "edit" && !drawings[lvl].length && !stroke) {
     label("Arraste o dedo para desenhar", W / 2, H / 2 - 18, C.muted, 30, C.paper);
     label("a pista do INÍCIO até a CHEGADA", W / 2, H / 2 + 22, C.muted, 30, C.paper);

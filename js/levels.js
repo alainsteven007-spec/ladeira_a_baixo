@@ -1,8 +1,8 @@
 // Level data: world size, the 50 levels, sections, magic item spots, per-orientation scaling, moving hazards.
 // World units: 100 px = 1 m, portrait slope. The skier rides on two ski contact points joined by a rigid
 // link (position-based dynamics); the body is drawn on top and only checked for hits.
-let W = 700, H = 1000; const PX = 100, G = 9.81 * PX, R = 9, AXLE = 36, SUB = 10;
-const CRASH_BASE = 750, VMAX = 2500, GOAL_R = 42, SPIN = 3.5, T_MAX = 40;
+let W = 700, H = 1000; const PX = 100, G = 9.81 * PX, R = 9, AXLE = 36, SUB = 5;
+const CRASH_BASE = 750, VMAX = 2500, GOAL_R = 48, SPIN = 3.5, T_MAX = 40;
 // Levels are authored for the 700×1000 portrait slope; sideways play stretches them to 1000×700.
 // start: launch pad [x1,y1,x2,y2] (skier faces from 1 to 2); goal: [x,y]
 // haz: deadly rects [x,y,w,h] — moving ones add [dx,dy,period s,phase 0..1] and sweep from x,y to x+dx,y+dy and back

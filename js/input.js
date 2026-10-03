@@ -7,28 +7,27 @@ function toWorld(e) {
   const w = turned ? r.height : r.width, h = turned ? r.width : r.height;
   return [(dx / w + .5) * W, (dy / h + .5) * H];
 }
+// a stroke that starts near the pad end or another stroke's end continues it, blended into its direction (no ledge)
+let strokeJoin = null, strokeShape = null; // while drawing: the joint it continues, and the processed curve shown live
 cv.addEventListener("pointerdown", e => {
   if (state !== "edit") return;
-  e.preventDefault(); cv.setPointerCapture(e.pointerId); stroke = [snap(toWorld(e))];
+  e.preventDefault(); cv.setPointerCapture(e.pointerId);
+  const p = toWorld(e); strokeJoin = joinAt(p);
+  stroke = [strokeJoin ? strokeJoin.at : p]; strokeShape = null;
 });
-// a stroke that starts near the pad end or another stroke's end continues it seamlessly (no ledge to fall off)
-function snap(p) {
-  const ends = [L().start.slice(2), ...drawings[lvl].map(st => st[st.length - 1])];
-  let best = p, bd = 40;
-  for (const q of ends) { const d = Math.hypot(p[0] - q[0], p[1] - q[1]); if (d < bd) { bd = d; best = [q[0], q[1]]; } }
-  return best;
-}
 cv.addEventListener("pointermove", e => {
   if (!stroke) return;
   for (const ev of e.getCoalescedEvents?.() || [e]) {
     const p = toWorld(ev), q = stroke[stroke.length - 1];
-    if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= 6) stroke.push(p);
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= 1.5) stroke.push(p);
   }
+  strokeShape = processStroke(stroke, strokeJoin?.dir);
 });
 const endStroke = () => {
   if (!stroke) return;
-  if (stroke.length > 1) { drawings[lvl].push(stroke); cleared = null; rebuild(); refresh(); }
-  stroke = null;
+  const shape = processStroke(stroke, strokeJoin?.dir);
+  if (shape && shape.length > 1) { drawings[lvl].push(shape); cleared = null; rebuild(); refresh(); }
+  stroke = null; strokeShape = null; strokeJoin = null;
 };
 cv.addEventListener("pointerup", endStroke);
 cv.addEventListener("pointercancel", endStroke);
