@@ -90,8 +90,9 @@ button.primary{background:var(--car);border-color:var(--car);color:var(--on-car)
 .slot.full{border-style:solid;color:var(--graphite);background:var(--panel)}
 button.slot{cursor:pointer;border-color:var(--gold)}
 .slot canvas{width:30px;height:30px;flex:none;box-shadow:none;border-radius:50%;cursor:inherit}
-.app.land .bag{flex-direction:column}
-.app.land .slot span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app.land .bag{gap:6px}
+.app.land .slot{flex:1;justify-content:center;padding:3px;min-height:2.4rem}
+.app.land .slot span{display:none} /* sideways the column is short: icons only, the name is in the tooltip */
 /* sideways: board on the left, controls in a column on the right */
 .app.land{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 10rem;grid-template-rows:auto 1fr;gap:8px 12px}
 .app.land .board{grid-column:1;grid-row:1/3}
@@ -104,7 +105,8 @@ button.slot{cursor:pointer;border-color:var(--gold)}
 .app.land #lvlBtn{max-width:none}
 .app.land .info{flex:0 0 auto}
 .app.land .controls .btns{flex-direction:column}
-.app.land .controls .btns button{height:2.9rem}
+.app.land .controls .btns button{height:2.6rem}
+.app.land .info{display:none} /* the level button already names the level */
 .app.land button.primary{min-width:0}
 /* phone held sideways with rotation lock: turn the whole app a quarter */
 body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--vw);margin:0;transform-origin:0 0;transform:rotate(90deg)}
@@ -790,6 +792,7 @@ function renderBag() {
     const c = document.createElement("canvas"); c.width = c.height = 60;
     el.append(c, Object.assign(document.createElement("span"), { textContent: dragon ? "Usar dragão" : MAGIC[k].name }));
     el.title = dragon ? `${MAGIC[k].name}: ${MAGIC[k].note}.` : `${MAGIC[k].name}: ${MAGIC[k].note}. Vale nesta fase e é gasto quando você vencer.`;
+    el.setAttribute("aria-label", dragon ? "Usar dragão" : `${MAGIC[k].name}, vale nesta fase`);
     if (dragon) { el.type = "button"; el.onclick = sendDragon; el.disabled = state !== "edit"; }
     magicIcon(c, k); slots.push(el);
   }
