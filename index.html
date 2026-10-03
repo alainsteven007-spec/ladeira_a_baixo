@@ -83,6 +83,15 @@ button.primary{background:var(--car);border-color:var(--car);color:var(--on-car)
 .opt small{font:500 .68rem/1.2 var(--f-mono);color:var(--muted);letter-spacing:.02em;text-align:center}
 .vnote{margin:0;line-height:1.4;min-height:2.8em}
 .pk .btns{justify-content:flex-end}
+/* bag of magic items: two slots; the dragon slot is a button */
+.bag{display:flex;gap:6px;align-items:stretch}
+.slot{display:flex;align-items:center;gap:6px;padding:3px 9px 3px 3px;border:1.5px dashed var(--edge);border-radius:8px;font:600 .8rem/1.15 var(--f-ui);color:var(--muted);min-height:2.5rem;min-width:0}
+.slot.empty{padding:3px 10px}
+.slot.full{border-style:solid;color:var(--graphite);background:var(--panel)}
+button.slot{cursor:pointer;border-color:var(--gold)}
+.slot canvas{width:30px;height:30px;flex:none;box-shadow:none;border-radius:50%;cursor:inherit}
+.app.land .bag{flex-direction:column}
+.app.land .slot span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* sideways: board on the left, controls in a column on the right */
 .app.land{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) 10rem;grid-template-rows:auto 1fr;gap:8px 12px}
 .app.land .board{grid-column:1;grid-row:1/3}
@@ -112,6 +121,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
   .app:not(.land) .pick{margin-left:0;width:100%}
   .app:not(.land) #lvlBtn{flex:1;max-width:none}
   .app:not(.land) .info{flex-basis:100%;text-align:center}
+  .app:not(.land) .bag{width:100%;justify-content:center}
   .app:not(.land) .controls .btns{width:100%}
   .app:not(.land) .controls .btns button{flex:1;height:3.2rem;padding:0 .5rem}
   .app:not(.land) button.primary{min-width:0;flex:1.6!important}
@@ -159,6 +169,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
   </div>
   <footer class="bar controls">
     <p class="info"><span id="info"></span><span class="more" id="more"></span></p>
+    <div class="bag" id="bag" role="group" aria-label="Bolsa de itens mágicos"></div>
     <div class="btns">
       <button id="undo">Desfazer</button>
       <button id="clear">Limpar</button>
@@ -171,7 +182,7 @@ body.turn .app{position:fixed;top:0;left:var(--vw);width:var(--vh);height:var(--
 // World units: 100 px = 1 m, portrait slope. The skier rides on two ski contact points joined by a rigid
 // link (position-based dynamics); the body is drawn on top and only checked for hits.
 let W = 700, H = 1000; const PX = 100, G = 9.81 * PX, R = 9, AXLE = 36, SUB = 10;
-const CRASH_BASE = 750, HELMET_BONUS = 50, VMAX = 2500, GOAL_R = 42, SPIN = 3.5, T_MAX = 40;
+const CRASH_BASE = 750, VMAX = 2500, GOAL_R = 42, SPIN = 3.5, T_MAX = 40;
 // Levels are authored for the 700×1000 portrait slope; sideways play stretches them to 1000×700.
 // start: launch pad [x1,y1,x2,y2] (skier faces from 1 to 2); goal: [x,y]
 // haz: deadly rects [x,y,w,h] — moving ones add [dx,dy,period s,phase 0..1] and sweep from x,y to x+dx,y+dy and back
@@ -180,8 +191,9 @@ const CRASH_BASE = 750, HELMET_BONUS = 50, VMAX = 2500, GOAL_R = 42, SPIN = 3.5,
 // aval: [delay s, speed px/s, accel px/s²] — a snow front starts behind the pad and sweeps toward the goal
 // atk: ["aguia", x, y, delay s, speed px/s] chases the skier; ["canhao", x, y, first shot s, every s, ball px/s] fires fireballs
 //   aimed where the skier would be if it kept going straight
-// items: [x, y, kind] — "capacete" takes one hit (and, kept to the finish, adds resistance for good), "turbo" pushes
-//   for 3 s, "lento" brakes for 3 s, "gelo" freezes everything that moves (and the clock that drives it) for 3 s
+// items: [x, y, kind] — power-ups for this run only: "turbo" pushes for 3 s, "lento" brakes for 3 s,
+//   "gelo" freezes everything that moves (and the clock that drives it) for 3 s
+// Every level also hides one magic item (MAGIC_SPOTS below): it only counts if the rider grabs it and finishes alive
 const LEVELS = [
   { name: "Primeira descida", start: [30,110,150,145], goal: [600,880], haz: [] },
   { name: "Desvio", start: [30,110,150,145], goal: [620,880], haz: [[0,620,320,50]] },
@@ -223,21 +235,24 @@ const LEVELS = [
   { name: "Grande final", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205],[340,-300,30,500,0,330,1.3,.025],[500,-70,30,500,0,330,1.1,.525],[200,-60,40,40,0,1100,1.7,.35]] },
   // modes: fire vents and fireballs, an avalanche on your tail, eagles and cannons that hunt the skier, then all at once
   { name: "Fogueira", start: [30,110,150,145], goal: [620,870], haz: [[400,420,120,120]], fire: [[290,300,60,320,1.8,.55,.95,0]], items: [[560,330,"turbo"]] },
-  { name: "Lança-chamas", start: [30,110,150,145], goal: [620,870], haz: [], fire: [[80,300,280,50,1.6,.45,.05,2],[330,600,370,50,1.4,.5,.65,3]], items: [[520,560,"capacete"]] },
+  { name: "Lança-chamas", start: [30,110,150,145], goal: [620,870], haz: [], fire: [[80,300,280,50,1.6,.45,.05,2],[330,600,370,50,1.4,.5,.65,3]] },
   { name: "Vulcão", start: [30,110,150,145], goal: [640,420], haz: [[400,0,120,360],[0,700,700,300]], fire: [[430,430,100,270,1.8,.45,.8,0]], atk: [["canhao",60,660,1.3,1.4,450]] },
   { name: "Fornalha", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205]], fire: [[320,420,50,210,1.5,.5,.75,0],[470,560,50,240,1.3,.5,.15,0]] },
   { name: "Onda branca", start: [30,110,150,145], goal: [620,880], haz: [], aval: [.8,300,600], items: [[300,375,"lento"]] },
-  { name: "Fuga do túnel", start: [30,110,150,145], goal: [620,870], haz: [[380,300,320,190],[0,760,360,240]], aval: [.8,300,600], items: [[330,715,"capacete"]] },
+  { name: "Fuga do túnel", start: [30,110,150,145], goal: [620,870], haz: [[380,300,320,190],[0,760,360,240]], aval: [.8,300,600] },
   { name: "Contramão gelada", start: [670,110,550,145], goal: [80,870], haz: [[0,0,310,520],[380,620,320,380]], aval: [.8,300,600], items: [[440,560,"turbo"]] },
   { name: "Vale da avalanche", start: [30,110,150,145], goal: [640,740], haz: [[450,280,250,370],[200,840,500,160]], aval: [.8,300,400], items: [[400,500,"gelo"]] },
   { name: "Águia", start: [30,110,150,145], goal: [640,420], haz: [[400,0,120,360],[0,700,700,300]], atk: [["aguia",80,300,.8,800]] },
   { name: "Canhão", start: [30,110,150,145], goal: [620,870], haz: [[400,420,120,120]], atk: [["canhao",650,600,1,1,900]], items: [[200,700,"gelo"]] },
-  { name: "Ninho", start: [30,110,150,145], goal: [620,870], haz: [], atk: [["aguia",470,610,1.4,500],["aguia",80,320,.8,800]], items: [[580,520,"capacete"]] },
+  { name: "Ninho", start: [30,110,150,145], goal: [620,870], haz: [], atk: [["aguia",470,610,1.4,500],["aguia",80,320,.8,800]] },
   { name: "Bombardeio", start: [30,420,150,455], goal: [640,880], haz: [[380,300,50,40,0,450,1.6,.55]], atk: [["canhao",640,120,.3,1,500],["canhao",60,900,1.3,1.2,500]] },
   { name: "Inferno branco", start: [30,110,150,145], goal: [620,870], haz: [[400,420,120,120]], fire: [[380,560,60,260,1.6,.5,.45,0]], aval: [.8,300,600], atk: [["aguia",640,200,.4,700]], items: [[470,380,"turbo"]] },
-  { name: "Fim do mundo", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205]], fire: [[320,420,50,210,1.5,.5,.5,0]], aval: [.8,300,600], atk: [["canhao",660,120,.3,.6,450]], items: [[470,470,"capacete"],[520,520,"gelo"]] },
+  { name: "Fim do mundo", start: [30,110,150,145], goal: [630,880], haz: [[0,330,150,670],[150,420,150,580],[300,630,150,370],[450,800,120,200],[280,0,420,215],[430,215,270,230],[580,445,120,205]], fire: [[320,420,50,210,1.5,.5,.5,0]], aval: [.8,300,600], atk: [["canhao",660,120,.3,.6,450]], items: [[520,520,"gelo"]] },
 ];
 const SECTIONS = [[0, "Clássicas"], [16, "Novas formas"], [36, "🔥 Fogo"], [40, "🏔 Avalanche"], [44, "🦅 Ataque"], [48, "☠ Tudo junto"]];
+// one magic item per level, [x, y, kind] in portrait coordinates (null: none yet); kinds are in MAGIC
+const MAGIC_SPOTS = LEVELS.map(() => null);
+Object.assign(MAGIC_SPOTS, { 37: [520, 560, "capacete"], 41: [330, 715, "bolha"], 46: [580, 520, "capacete"], 49: [470, 470, "dragao"] });
 let land = false; // sideways play
 const LAND_PACE = .7;
 const levelCache = {};
@@ -254,7 +269,8 @@ function levelFor(i) { // the level as played in the current orientation
       fire: (src.fire || []).map(f => f.map((v, j) => j < 4 ? v * (j % 2 ? sy : sx) : j === 4 ? v / p : v)),
       atk: (src.atk || []).map(a => a[0] === "aguia" ? [a[0], a[1] * sx, a[2] * sy, a[3] / p, a[4] * p]
         : [a[0], a[1] * sx, a[2] * sy, a[3] / p, a[4] / p, a[5] * p]),
-      items: (src.items || []).map(([x, y, k]) => [x * sx, y * sy, k]) };
+      items: (src.items || []).map(([x, y, k]) => [x * sx, y * sy, k]),
+      magic: MAGIC_SPOTS[i] && [MAGIC_SPOTS[i][0] * sx, MAGIC_SPOTS[i][1] * sy, MAGIC_SPOTS[i][2]] };
     if (src.aval) { // the front travels along pad end → goal; stretch its speed with that distance too
       const [, , px, py] = src.start, [gx, gy] = src.goal, k = Math.hypot((gx - px) * sx, (gy - py) * sy) / Math.hypot(gx - px, gy - py);
       levelCache[key].aval = [src.aval[0] / p, src.aval[1] * k * p, src.aval[2] * k * p * p];
@@ -347,13 +363,30 @@ let segs = [], state = "edit", car = null, stroke = null, parts = [], rag = [], 
 let tRun = 0, best = 0, stale = 0, vNow = 0, endTimer = 0;
 try { JSON.parse(localStorage.getItem("ladeira-ski-done") || "[]").forEach(i => done.add(i)); } catch {}
 try { land = localStorage.getItem("ladeira-land") === "1"; } catch {}
-// magic: power-up timers and helmet charges for this run, attackers in flight, items already taken
+// per run: power-up timers, magic charges and guards, attackers in flight, items already taken
 const FX_T = 3, GRACE = 1.2, TURBO = 6 * PX, BRAKE = 1.8, STEER = 3;
 let fx = null, eagles = [], balls = [], shots = [], taken = new Set(), floaters = [];
-const helmets = new Set(); // levels whose helmet reached the finish: each one toughens the skier for good
-try { JSON.parse(localStorage.getItem("ladeira-capacetes") || "[]").forEach(i => helmets.add(i)); } catch {}
+// Magic items: won by grabbing a level's item and finishing alive. The bag holds at most 2. Everything in it except
+// the dragon works in the next level played and is spent only when that level is won (a crash spends nothing);
+// the dragon waits until the player sends it. Magic never changes the physics, it only cancels a loss, so every
+// level stays solvable without it. hits: blows it absorbs; guard: what can't hurt at all during the level.
+const MAGIC = {
+  bolha: { name: "Bolha", hits: 1, note: "aguenta 1 batida" },
+  capacete: { name: "Capacete", hits: 3, note: "aguenta 3 batidas" },
+  pena: { name: "Pena", guard: "impact", note: "pancadas e quedas não machucam" },
+  brasa: { name: "Amuleto de brasa", guard: "fire", note: "fogo e bolas de fogo não queimam" },
+  cachecol: { name: "Cachecol de neve", guard: "aval", note: "a avalanche passa sem soterrar" },
+  apito: { name: "Apito", guard: "aguia", note: "as águias ficam no ninho" },
+  dragao: { name: "Dragão", note: "leva direto à chegada; use quando quiser" },
+};
+const BAG_MAX = 2, DRAGON_T = 2.4;
+let bag = [], earned = new Set();
+try { bag = JSON.parse(localStorage.getItem("ladeira-bolsa") || "[]").filter(k => MAGIC[k]).slice(0, BAG_MAX); } catch {}
+try { JSON.parse(localStorage.getItem("ladeira-magia") || "[]").forEach(i => earned.add(i)); } catch {}
+const saveMagic = () => { try { localStorage.setItem("ladeira-bolsa", JSON.stringify(bag)); localStorage.setItem("ladeira-magia", JSON.stringify([...earned])); } catch {} };
+const activeMagic = () => bag.filter(k => k !== "dragao"); // what this level's runs get
 let CRASH_V = CRASH_BASE;
-const toughen = () => { CRASH_V = CRASH_BASE + HELMET_BONUS * helmets.size + VEH().tough; };
+const toughen = () => { CRASH_V = CRASH_BASE + VEH().tough; };
 toughen();
 
 const L = () => levelFor(lvl);
@@ -413,7 +446,7 @@ function collide(w) {
     w.x += ex * (R - d); w.y += ey * (R - d); w.c = true; w.nx = ex; w.ny = ey;
     const vn = w.vx * ex + w.vy * ey; // approach speed before this step
     if (vn < -100) impact = true;
-    if (vn < -CRASH_V && state === "run") hurt("Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. O esquiador aguenta até ${ms(CRASH_V)}.`);
+    if (vn < -CRASH_V && state === "run") hurt("Pancada forte!", `Bateu a ${ms(-vn)} contra a neve. O esquiador aguenta até ${ms(CRASH_V)}.`, "impact");
   }
 }
 // ½v² + g·height for both contacts (per unit mass; y grows downward)
@@ -455,12 +488,12 @@ function physics(dt) {
     }
   }
 }
-const WHY = {
-  haz: ["Bateu na pedra!", "O esquiador encostou na área listrada. Desvie dela com a pista."],
-  fire: ["Queimou!", "Passou pelo fogo aceso. As chamas acendem e apagam: acerte o tempo mudando a pista."],
-  aguia: ["A águia pegou!", "A águia mergulhou no esquiador. Desça mais rápido que ela, ou passe longe do ninho."],
-  bola: ["Bola de fogo!", "O canhão mira onde o esquiador vai estar se seguir reto. Faça curvas para a bola errar."],
-  aval: ["Soterrado!", "A avalanche alcançou o esquiador. Desenhe uma descida mais rápida."],
+const WHY = { // title, text, what kind of harm (a magic guard can cancel it)
+  haz: ["Bateu na pedra!", "O esquiador encostou na área listrada. Desvie dela com a pista.", "haz"],
+  fire: ["Queimou!", "Passou pelo fogo aceso. As chamas acendem e apagam: acerte o tempo mudando a pista.", "fire"],
+  aguia: ["A águia pegou!", "A águia mergulhou no esquiador. Desça mais rápido que ela, ou passe longe do ninho.", "aguia"],
+  bola: ["Bola de fogo!", "O canhão mira onde o esquiador vai estar se seguir reto. Faça curvas para a bola errar.", "fire"],
+  aval: ["Soterrado!", "A avalanche alcançou o esquiador. Desenhe uma descida mais rápida.", "aval"],
 };
 function update(dt) {
   tRun += dt;
@@ -468,7 +501,7 @@ function update(dt) {
   physics(dt);
   if (state !== "run") return;
   const [a, b] = car.w, probes = VEH().probes.map(p => local(...p));
-  if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo do esquiador bateu na neve. Curvas fechadas e lombadas derrubam ele.")) return;
+  if (probes.some(([px, py]) => touch(px, py, 2.5)) && hurt("Caiu de cabeça!", "O corpo do esquiador bateu na neve. Curvas fechadas e lombadas derrubam ele.", "impact")) return;
   if (!fx.gelo) { tHaz += dt; moveAttackers(dt); } // the ice charm stops the world clock
   for (const d of dangers()) if (hits(d, probes)) { if (hurt(...WHY[d.why])) return; break; }
   const F = front();
@@ -482,12 +515,13 @@ function update(dt) {
   if (stale > 3.5) return end("crash", "Não chegou lá", "O esquiador perdeu o embalo. Só a gravidade empurra: a chegada precisa ficar mais baixa que o ponto mais alto do caminho.", false);
   if (tRun > T_MAX) return end("crash", "Tempo esgotado", `Passaram ${T_MAX} s e o esquiador não chegou.`, false);
 }
-// a hit ends the run unless the helmet takes it; after that the skier gets a moment to get clear
-function hurt(title, text) {
-  if (fx.grace > 0) return false;
+// a hit ends the run unless magic cancels it: a guard for that kind of harm, or a charge of bubble/helmet
+// (after a charge the rider gets a moment to get clear)
+function hurt(title, text, kind) {
+  if (fx.guard.has(kind) || fx.grace > 0) return false;
   if (fx.shield > 0) {
     fx.shield--; fx.grace = GRACE;
-    const [x, y] = local(VEH().mid[0], VEH().mid[1] + 30); floaters.push({ x, y, text: "Capacete salvou!", key: "gold", life: 1 });
+    const [x, y] = local(VEH().mid[0], VEH().mid[1] + 30); floaters.push({ x, y, text: "A magia salvou!", key: "gold", life: 1 });
     return false;
   }
   end("crash", title, text); return true;
@@ -496,10 +530,10 @@ function hurt(title, text) {
 function dangers() {
   const out = [];
   for (const h of L().haz) out.push({ r: hazAt(h), why: "haz" });
-  for (const f of L().fire) if (lit(f)) out.push({ r: f.slice(0, 4), why: "fire" });
+  if (!fx.guard.has("fire")) for (const f of L().fire) if (lit(f)) out.push({ r: f.slice(0, 4), why: "fire" });
   for (const a of L().atk) if (a[0] === "canhao") out.push({ r: [a[1] - 16, a[2] - 14, 32, 28], why: "haz" });
-  for (const e of eagles) out.push({ c: [e.x, e.y, 15], why: "aguia" });
-  for (const o of balls) out.push({ c: [o.x, o.y, 10], why: "bola" });
+  if (!fx.guard.has("aguia")) for (const e of eagles) out.push({ c: [e.x, e.y, 15], why: "aguia" });
+  if (!fx.guard.has("fire")) for (const o of balls) out.push({ c: [o.x, o.y, 10], why: "bola" });
   return out;
 }
 function hits(d, probes) {
@@ -521,7 +555,7 @@ function front() {
 function moveAttackers(dt) {
   const [cx, cy] = local(...VEH().mid), vx = (car.w[0].vx + car.w[1].vx) / 2, vy = (car.w[0].vy + car.w[1].vy) / 2;
   for (const e of eagles) {
-    if (tHaz < e.delay) continue;
+    if (tHaz < e.delay || fx.guard.has("aguia")) continue; // the whistle keeps them on the nest
     const dx = cx - e.x, dy = cy - e.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, STEER * dt);
     e.vx += (dx / d * e.speed - e.vx) * k; e.vy += (dy / d * e.speed - e.vy) * k;
     e.x += e.vx * dt; e.y += e.vy * dt;
@@ -540,37 +574,76 @@ function moveAttackers(dt) {
   balls = balls.filter(o => o.x > -60 && o.x < W + 60 && o.y > -60 && o.y < H + 60);
 }
 const ITEM_R = 22, ITEMS = {
-  capacete: ["Capacete!", "gold"], turbo: ["Turbo 3 s!", "hazard"], lento: ["Lento 3 s…", "slow"], gelo: ["Tudo congelado 3 s!", "ice"],
+  turbo: ["Turbo 3 s!", "hazard"], lento: ["Lento 3 s…", "slow"], gelo: ["Tudo congelado 3 s!", "ice"],
 };
 function pickUp(probes) {
-  const pts = probes.concat(car.w.map(w => [w.x, w.y]));
+  const pts = probes.concat(car.w.map(w => [w.x, w.y])), mg = L().magic;
+  if (mg && !fx.magic && !earned.has(lvl) && pts.some(([px, py]) => Math.hypot(px - mg[0], py - mg[1]) < ITEM_R)) {
+    fx.magic = mg[2]; // only kept if the rider finishes alive
+    floaters.push({ x: mg[0], y: mg[1] - 26, text: `${MAGIC[mg[2]].name}! Chegue vivo para ficar`, key: "gold", life: 1.4 });
+    if (!reduce) for (let k = 0; k < 24; k++) { const an = k / 24 * Math.PI * 2; parts.push({ x: mg[0], y: mg[1], vx: Math.cos(an) * 260, vy: Math.sin(an) * 260 - 120, life: 1, key: "gold", r: an }); }
+  }
   L().items.forEach(([x, y, kind], i) => {
     if (taken.has(i) || !pts.some(([px, py]) => Math.hypot(px - x, py - y) < ITEM_R)) return;
     taken.add(i);
-    if (kind === "capacete") { fx.shield++; fx.helmet = true; } else fx[kind] = FX_T;
+    fx[kind] = FX_T;
     floaters.push({ x, y: y - 24, text: ITEMS[kind][0], key: ITEMS[kind][1], life: 1 });
     if (!reduce) for (let k = 0; k < 18; k++) { const an = k / 18 * Math.PI * 2; parts.push({ x, y, vx: Math.cos(an) * 220, vy: Math.sin(an) * 220 - 120, life: .8, key: ITEMS[kind][1], r: an }); }
   });
 }
 function arm() { // fresh per-run magic so every Play starts the same
-  fx = { turbo: 0, lento: 0, gelo: 0, grace: 0, shield: 0, helmet: false };
+  const act = activeMagic();
+  fx = { turbo: 0, lento: 0, gelo: 0, grace: 0, magic: null,
+    shield: act.reduce((n, k) => n + (MAGIC[k].hits || 0), 0), guard: new Set(act.map(k => MAGIC[k].guard).filter(Boolean)) };
   eagles = L().atk.filter(a => a[0] === "aguia").map(a => ({ x: a[1], y: a[2], delay: a[3], speed: a[4], vx: 0, vy: 0 }));
   balls = []; shots = L().atk.map(() => 0); taken = new Set(); floaters = [];
 }
-function end(kind, title, text, boom = true) {
+function end(kind, title, text, boom = true, byDragon = false) {
   state = kind;
   if (kind === "win") {
-    if (!reduce) burst(...local(...VEH().mid));
+    if (!reduce) burst(...(byDragon ? L().goal : local(...VEH().mid)));
     done.add(lvl); try { localStorage.setItem("ladeira-ski-done", JSON.stringify([...done])); } catch {}
-    if (fx.helmet && !helmets.has(lvl)) {
-      helmets.add(lvl); toughen(); try { localStorage.setItem("ladeira-capacetes", JSON.stringify([...helmets])); } catch {}
-      text += ` Você levou o capacete mágico até a chegada: agora o esquiador aguenta pancada até ${ms(CRASH_V)} em todas as fases.`;
-    }
+    text += byDragon ? spendDragon() : settleMagic();
     renderLevels();
   } else if (boom) shatter();
   clearTimeout(endTimer);
   endTimer = setTimeout(() => showCard(kind, title, text), kind === "win" ? 650 : 1100);
   refresh();
+}
+// a ridden win spends the magic that was working in this level, then banks the item grabbed on the way
+function settleMagic() {
+  let note = "";
+  const used = activeMagic();
+  if (used.length) {
+    bag = bag.filter(k => k === "dragao");
+    note += ` ${used.map(k => MAGIC[k].name).join(" e ")} ${used.length > 1 ? "foram usados" : "foi usado"} nesta fase.`;
+  }
+  if (fx.magic) {
+    const m = MAGIC[fx.magic];
+    if (bag.length < BAG_MAX) {
+      bag.push(fx.magic); earned.add(lvl);
+      note += fx.magic === "dragao" ? ` Você ganhou um ${m.name}! Use quando quiser: ${m.note}.` : ` Você ganhou: ${m.name} (${m.note}). Vale na próxima fase que você jogar.`;
+    } else note += ` Sua bolsa está cheia (máximo ${BAG_MAX}): ${m.name} ficou nesta fase. Use um item e volte para buscar.`;
+  }
+  saveMagic(); renderBag();
+  return note;
+}
+function spendDragon() {
+  bag.splice(bag.indexOf("dragao"), 1); saveMagic(); renderBag();
+  return "";
+}
+// the dragon: carries the rider from the pad over the slope to the goal; spent only when it lands
+let dragonT = 0, flown = false;
+function sendDragon() {
+  if (state !== "edit" || !bag.includes("dragao")) return;
+  overlay.hidden = true; state = "dragon"; dragonT = 0; flown = true; refresh();
+}
+function dragonAt(u) { // position and heading on a high arc from the pad to the goal
+  const [, , x2, y2] = L().start, [gx, gy] = L().goal;
+  const P = [[x2, y2 - 40], [(x2 + gx) / 2, Math.max(70, Math.min(y2, gy) - 220)], [gx, gy - 26]];
+  const at = j => (1 - u) ** 2 * P[0][j] + 2 * (1 - u) * u * P[1][j] + u * u * P[2][j];
+  const sl = j => 2 * (1 - u) * (P[1][j] - P[0][j]) + 2 * u * (P[2][j] - P[1][j]);
+  return { x: at(0), y: at(1), dx: sl(0) || 1e-6, dy: sl(1) };
 }
 function burst(x, y) {
   const keys = ["ok", "ink", "hazard", "car"];
@@ -640,7 +713,7 @@ function showCard(kind, title, text) {
 }
 function reset() {
   clearTimeout(endTimer); overlay.hidden = true;
-  state = "edit"; parts = []; rag = []; drops = []; stains = []; tRun = 0; spawn(); arm(); refresh();
+  state = "edit"; parts = []; rag = []; drops = []; stains = []; tRun = 0; flown = false; spawn(); arm(); refresh();
 }
 function play() {
   if (state !== "edit") return reset();
@@ -657,12 +730,11 @@ function clearAll() {
   if (state !== "edit" || !drawings[lvl].length) return;
   cleared = drawings[lvl]; drawings[lvl] = []; rebuild(); refresh();
 }
-// ↔ something moves · ✦ a helmet is hidden here · ⛑ its helmet was carried to the finish
-const hasHelmet = l => (l.items || []).some(it => it[2] === "capacete");
+// ↔ something moves · ✦ its magic item is still out there · ★ its magic item was won
 function optText(l, i) {
   const moves = l.haz.some(h => h.length > 4) || l.fire || l.atk || l.aval;
-  const helm = hasHelmet(l) ? helmets.has(i) ? " ⛑" : " ✦" : "";
-  return `${i + 1}. ${l.name}${moves ? " ↔" : ""}${helm}${done.has(i) ? "  ✓" : ""}`;
+  const magic = MAGIC_SPOTS[i] ? earned.has(i) ? " ★" : " ✦" : "";
+  return `${i + 1}. ${l.name}${moves ? " ↔" : ""}${magic}${done.has(i) ? "  ✓" : ""}`;
 }
 function renderLevels() {
   $("#lvlBtn").textContent = optText(LEVELS[lvl], lvl) + "  ▾";
@@ -703,14 +775,34 @@ function setLand(on) {
 }
 $("#turn").onclick = () => setLand(!land);
 addEventListener("resize", orient);
+function magicIcon(c, kind) {
+  const g = c.getContext("2d"), st = getComputedStyle(document.documentElement), P = {};
+  for (const n of ["paper", "graphite", "muted", "ink", "gold", "glass", "fire", "hazard", "ice", "slow", "ok", "bad", "car"]) P[n] = st.getPropertyValue("--" + n).trim();
+  g.setTransform(c.width / 30, 0, 0, c.width / 30, 15 * c.width / 30, 15 * c.width / 30);
+  paintMagic(g, P, kind, 0);
+}
+function renderBag() {
+  const slots = [];
+  for (let i = 0; i < BAG_MAX; i++) {
+    const k = bag[i], dragon = k === "dragao", el = document.createElement(dragon ? "button" : "div");
+    el.className = "slot " + (k ? "full" : "empty");
+    if (!k) { el.textContent = "vazio"; el.title = "Espaço livre na bolsa"; slots.push(el); continue; }
+    const c = document.createElement("canvas"); c.width = c.height = 60;
+    el.append(c, Object.assign(document.createElement("span"), { textContent: dragon ? "Usar dragão" : MAGIC[k].name }));
+    el.title = dragon ? `${MAGIC[k].name}: ${MAGIC[k].note}.` : `${MAGIC[k].name}: ${MAGIC[k].note}. Vale nesta fase e é gasto quando você vencer.`;
+    if (dragon) { el.type = "button"; el.onclick = sendDragon; el.disabled = state !== "edit"; }
+    magicIcon(c, k); slots.push(el);
+  }
+  $("#bag").replaceChildren(...slots);
+}
 function refresh() {
   const [x1, y1, x2, y2] = L().start, drop = L().goal[1] - (y1 + y2) / 2;
   let ink = 0; for (const st of drawings[lvl]) for (let i = 1; i < st.length; i++) ink += Math.hypot(st[i][0] - st[i-1][0], st[i][1] - st[i-1][1]);
   $("#info").textContent = `Fase ${lvl + 1}/${LEVELS.length} · ${L().name}`;
-  const hidden = LEVELS.filter(hasHelmet).length;
-  $("#more").textContent = ` · desnível ${m(drop)} · pista ${m(ink)} · aguenta pancada até ${ms(CRASH_V)} · capacetes ${helmets.size}/${hidden}`;
+  $("#more").textContent = ` · desnível ${m(drop)} · pista ${m(ink)} · aguenta pancada até ${ms(CRASH_V)} · itens mágicos ${earned.size}/${MAGIC_SPOTS.filter(Boolean).length}`;
   const edit = state === "edit";
-  $("#play").textContent = edit ? "▶ Play" : state === "run" ? "■ Parar" : "↺ Redesenhar";
+  $("#play").textContent = edit ? "▶ Play" : state === "run" || state === "dragon" ? "■ Parar" : "↺ Redesenhar";
+  renderBag();
   $("#undo").disabled = !edit || (!drawings[lvl].length && !cleared);
   $("#clear").disabled = !edit || !drawings[lvl].length;
   cv.classList.toggle("busy", !edit);
@@ -742,7 +834,7 @@ function renderPicker() {
   vehs.forEach(([b]) => b.querySelector("small").style.whiteSpace = "pre");
   chars.forEach(([, c], i) => preview(c, CHARACTERS[i], VEH())); vehs.forEach(([, c], i) => preview(c, CHAR(), VEHICLES[i]));
   const v = VEH(), h = ["", "rente ao chão", "baixa", "normal"][v.rate[2]];
-  $("#vnote").textContent = `${v.name}: ${v.note} Aguenta pancada até ${ms(CRASH_BASE + HELMET_BONUS * helmets.size + v.tough)}. Altura: ${h}.`;
+  $("#vnote").textContent = `${v.name}: ${v.note} Aguenta pancada até ${ms(CRASH_BASE + v.tough)}. Altura: ${h}.`;
   $("#who").textContent = `${CHAR().name} · ${VEH().name}`;
 }
 function pickRider(change) {
@@ -898,9 +990,11 @@ function draw() {
   }
 
   L().items.forEach(([x, y, kind], i) => taken.has(i) || drawItem(C, x, y, kind, now));
+  const mg = L().magic;
+  if (mg && !earned.has(lvl) && !fx?.magic && !flown) drawMagicSpot(C, mg, now);
   ctx.fillStyle = C.blood;
   for (const s of stains) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill(); }
-  if (rag.length) drawRag(C); else drawSkier(C, now);
+  if (flown) drawDragonFlight(C, now); else if (rag.length) drawRag(C); else drawSkier(C, now);
   for (const e of eagles) drawEagle(C, e, now);
   for (const o of balls) drawBall(C, o);
   drawAval(C, now);
@@ -914,13 +1008,14 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  if (state !== "edit") {
+  if (state !== "edit" && !flown) {
     ctx.font = `500 20px ${css("f-mono")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const t = `t ${sec(tRun)}   v ${ms(vNow)}`;
     ctx.lineWidth = 5; ctx.strokeStyle = C.paper; ctx.strokeText(t, W / 2, 26); ctx.fillStyle = C.graphite; ctx.fillText(t, W / 2, 26);
     const on = [["turbo", "TURBO", "hazard"], ["lento", "LENTO", "slow"], ["gelo", "GELO", "ice"]].filter(([k]) => fx[k] > 0)
       .map(([k, name, key]) => [`${name} ${sec(fx[k])}`, key]);
-    if (fx.shield) on.push([`CAPACETE ×${fx.shield}`, "gold"]);
+    if (fx.shield) on.push([`PROTEÇÃO ×${fx.shield}`, "gold"]);
+    for (const k of activeMagic()) if (MAGIC[k].guard) on.push([MAGIC[k].name.toUpperCase(), "gold"]);
     ctx.font = `500 16px ${css("f-mono")}`;
     on.forEach(([text, key], i) => { const y = 52 + i * 22; ctx.strokeText(text, W / 2, y); ctx.fillStyle = C[key]; ctx.fillText(text, W / 2, y); });
   }
@@ -1005,12 +1100,8 @@ function drawItem(C, x, y, kind, now) {
   ctx.save(); ctx.translate(x, y);
   ctx.fillStyle = C[key]; ctx.globalAlpha = .22; ctx.beginPath(); ctx.arc(0, 0, 21 * pulse, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
   ctx.strokeStyle = C[key]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 15, 0, 7); ctx.stroke();
-  if (kind === "capacete") for (let i = 0; i < 4; i++) { // sparkles: it is magic
-    const an = now * 2 + i * Math.PI / 2; ctx.fillStyle = C.gold; ctx.fillRect(Math.cos(an) * 24 - 2, Math.sin(an) * 24 - 2, 4, 4);
-  }
   ctx.fillStyle = C[key]; ctx.strokeStyle = C.graphite; ctx.lineWidth = 1.5; ctx.beginPath();
-  if (kind === "capacete") { ctx.arc(0, 4, 10, Math.PI, 0); ctx.lineTo(12, 6); ctx.lineTo(-10, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = C.glass; ctx.fillRect(2, -1, 8, 4); ctx.strokeRect(2, -1, 8, 4); }
-  else if (kind === "turbo") { ctx.moveTo(3, -12); ctx.lineTo(-7, 2); ctx.lineTo(-1, 2); ctx.lineTo(-4, 12); ctx.lineTo(7, -3); ctx.lineTo(1, -3); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  if (kind === "turbo") { ctx.moveTo(3, -12); ctx.lineTo(-7, 2); ctx.lineTo(-1, 2); ctx.lineTo(-4, 12); ctx.lineTo(7, -3); ctx.lineTo(1, -3); ctx.closePath(); ctx.fill(); ctx.stroke(); }
   else if (kind === "lento") { ctx.moveTo(-11, 7); ctx.lineTo(10, 7); ctx.quadraticCurveTo(12, 1, 7, 2); ctx.lineTo(-8, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.arc(-1, -1, 7, 0, 7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(-1, -1, 3.5, 0, 5); ctx.stroke(); }
   else { ctx.strokeStyle = C[key]; ctx.lineWidth = 2.5; for (let i = 0; i < 3; i++) { const an = i * Math.PI / 3, c = Math.cos(an) * 11, s = Math.sin(an) * 11; ctx.moveTo(-c, -s); ctx.lineTo(c, s); } ctx.stroke(); }
@@ -1021,6 +1112,233 @@ function palette(C, ch) {
   const c = v => v && v.startsWith("--") ? css(v.slice(2)) : v;
   return { ...C, jacket: c(ch.jacket), pants: c(ch.pants), skin: c(ch.skin), hat: c(ch.hat), hair: c(ch.hair || ch.hat),
     gear: C.graphite, wood: "#a0612f", tube: "#e2452f", metal: "#8d96a3" };
+}
+// ---- magic art: item icons (centred, radius 13) and the dragon (facing +x, saddle at (0,-12)) ----
+function paintMagicIcon(g, P, kind, t) {
+  t = t || 0;
+  g.save();
+  g.lineJoin = "round"; g.lineCap = "round"; g.lineWidth = 1.4;
+  g.strokeStyle = P.graphite;
+  const sc = { capacete: .86, cachecol: .9, apito: .88, dragao: .86, brasa: .9, pena: .9 }[kind] || 1;
+  g.scale(sc, sc); g.lineWidth = 1.4 / sc * Math.min(1, sc + .1);
+  const PI = Math.PI, ink = P.graphite, cream = "#f7f2e2";
+  const fs = (c) => { g.fillStyle = c; g.fill(); g.stroke(); };
+  const dot = (x, y, r, c, line) => { g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = c; g.fill(); if (line) g.stroke(); };
+
+  if (kind === "bolha") {
+    const k = 1 + .03 * Math.sin(t * 3);
+    g.beginPath(); g.arc(0, 0, 11.5 * k, 0, 7);
+    g.fillStyle = P.glass; g.globalAlpha = .45; g.fill(); g.globalAlpha = 1; g.stroke();
+    g.strokeStyle = P.ice; g.lineWidth = 1.8; g.beginPath(); g.arc(0, 0, 8.6 * k, .15 * PI, .85 * PI); g.stroke();
+    g.strokeStyle = P.slow; g.globalAlpha = .6; g.beginPath(); g.arc(0, 0, 8.6 * k, 1.1 * PI, 1.3 * PI); g.stroke(); g.globalAlpha = 1;
+    g.strokeStyle = "#fff"; g.lineWidth = 2.6; g.beginPath(); g.arc(0, 0, 8 * k, 1.12 * PI, 1.58 * PI); g.stroke();
+    dot(5.2, -6.2, 1.5, "#fff");
+  } else if (kind === "capacete") {
+    g.beginPath(); g.moveTo(-11, 6); g.lineTo(-11, 1); g.arc(0, 1, 11, PI, 0); g.lineTo(11, 6); g.closePath(); fs(P.gold);
+    g.beginPath(); g.roundRect(-12.5, 4, 25, 5, 1.5); fs("#b07e00");
+    g.beginPath(); g.moveTo(3, -1); g.lineTo(11, -1); g.lineTo(11, 4); g.lineTo(3, 4); g.closePath(); fs(P.glass);
+    g.beginPath(); g.moveTo(-1.5, -9.8); g.lineTo(-1.5, 4); g.stroke();
+    for (const [x, y] of [[-8, -1.5], [-5.5, -6], [6, -7.2]]) dot(x, y, 1.7, cream, true);
+    const sp = (Math.sin(t * 4) + 1) / 2; g.fillStyle = "#fff"; g.globalAlpha = .5 + .5 * sp;
+    g.fillRect(-9.5, -4.5, 1.2, 1.2); g.globalAlpha = 1;
+  } else if (kind === "pena") {
+    g.save(); g.rotate(-.78 + .06 * Math.sin(t * 2));
+    g.beginPath(); g.moveTo(0, -13); g.bezierCurveTo(9, -8, 8, 4, 0, 8); g.bezierCurveTo(-8, 4, -9, -8, 0, -13); g.closePath();
+    fs(P.ice);
+    g.strokeStyle = "#fff"; g.lineWidth = 1.1; g.beginPath();
+    for (const y of [-8, -4, 0, 4]) { const w = y < -6 ? 4.5 : 6; g.moveTo(0, y + 2); g.lineTo(-w, y - 1.5); g.moveTo(0, y + 2); g.lineTo(w, y - 1.5); }
+    g.stroke();
+    g.strokeStyle = ink; g.lineWidth = 1.8; g.beginPath(); g.moveTo(0, -12); g.lineTo(0, 14); g.stroke();
+    g.restore();
+  } else if (kind === "brasa") {
+    g.lineWidth = 1.6; g.beginPath(); g.moveTo(-8, -12); g.quadraticCurveTo(-8, -3, -.5, -2.5); g.moveTo(8, -12); g.quadraticCurveTo(8, -3, .5, -2.5); g.stroke();
+    g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(0, -4); g.lineTo(8, 0); g.lineTo(7, 8); g.lineTo(0, 12.5); g.lineTo(-7, 8); g.lineTo(-8, 0); g.closePath(); fs(P.fire);
+    const f = 1 + .08 * Math.sin(t * 9);
+    g.beginPath(); g.moveTo(0, -3.5 + (1 - f) * 20); g.quadraticCurveTo(5.5, 3, 3.5, 6.5); g.quadraticCurveTo(0, 9.5, -3.5, 6.5); g.quadraticCurveTo(-5, 3, 0, -3.5 + (1 - f) * 20);
+    g.fillStyle = P.hazard; g.fill();
+    g.fillStyle = cream; g.beginPath(); g.ellipse(0, 6, 1.6, 1.9, 0, 0, 7); g.fill();
+  } else if (kind === "cachecol") {
+    const stripe = (a, b) => ([a, b]);
+    g.save(); // hanging tail with fringe
+    g.translate(5, 0); g.rotate(-.12);
+    g.beginPath(); g.rect(-3.5, -2, 7, 12); g.fillStyle = P.bad; g.fill();
+    g.fillStyle = cream; g.fillRect(-3.5, 2, 7, 2.6); g.fillRect(-3.5, 7, 7, 2.6);
+    g.beginPath(); g.rect(-3.5, -2, 7, 12); g.stroke();
+    g.lineWidth = 1.2; g.beginPath(); for (const x of [-2.5, 0, 2.5]) { g.moveTo(x, 10); g.lineTo(x, 13); } g.stroke();
+    g.restore();
+    g.lineCap = "butt";
+    g.strokeStyle = ink; g.lineWidth = 10.6; g.beginPath(); g.moveTo(-11, -4); g.quadraticCurveTo(0, 5, 11, -4); g.stroke();
+    g.strokeStyle = P.bad; g.lineWidth = 8; g.beginPath(); g.moveTo(-11, -4); g.quadraticCurveTo(0, 5, 11, -4); g.stroke();
+    g.strokeStyle = cream; g.lineWidth = 2.6;
+    for (const u of [.2, .5, .8]) { const x = -11 + 22 * u, y = (1 - u) * (1 - u) * -4 + 2 * u * (1 - u) * 5 + u * u * -4; g.beginPath(); g.moveTo(x, y - 3.6); g.lineTo(x, y + 3.6); g.stroke(); }
+    g.lineCap = "round";
+  } else if (kind === "apito") {
+    g.save(); g.rotate(-.18);
+    g.beginPath(); g.arc(-8.5, -9.8, 2.8, 0, 7); g.lineWidth = 1.6; g.stroke(); g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(-12, -2); g.lineTo(1, -2); g.lineTo(1, 4); g.lineTo(-12, 4); g.closePath(); fs(P.hazard);
+    g.beginPath(); g.arc(4.5, 2, 7.5, 0, 7); fs(P.hazard);
+    g.beginPath(); g.arc(4.5, 2, 3.4, 0, 7); fs(P.paper);
+    g.fillStyle = ink; g.fillRect(-6, -2.4, 4, 1.6);
+    g.strokeStyle = "#fff"; g.lineWidth = 1.6; g.beginPath(); g.arc(4.5, 2, 5.4, 1.15 * PI, 1.45 * PI); g.stroke();
+    g.restore();
+    const a = (Math.sin(t * 6) + 1) / 2; g.strokeStyle = P.hazard; g.lineWidth = 1.6; g.globalAlpha = .55 + .45 * a;
+    g.beginPath(); g.moveTo(5, -10); g.lineTo(8, -12.5); g.moveTo(9, -7); g.lineTo(12.2, -8.2); g.stroke(); g.globalAlpha = 1;
+  } else if (kind === "dragao") {
+    const body = "#35b08c", dark = "#1f7d66", bone = "#f3dc9c", sy = Math.sin(t * 5) * .8;
+    g.beginPath(); g.moveTo(-3, -9); g.lineTo(-7.5, -14); g.lineTo(-7, -7); g.closePath(); fs(bone); // horn
+    g.beginPath(); g.moveTo(-9, 3); g.lineTo(-13, 7); g.lineTo(-7, 8); g.closePath(); fs(P.hazard);  // frill
+    g.beginPath(); g.moveTo(-8, -6); g.bezierCurveTo(-4, -12, 6, -10, 8, -5); g.bezierCurveTo(14, -4, 14, 4, 9, 6);
+    g.bezierCurveTo(7, 10, -3, 11, -8, 7); g.bezierCurveTo(-12, 3, -12, -3, -8, -6); g.closePath(); fs(body);
+    g.beginPath(); g.moveTo(5, 6); g.bezierCurveTo(9, 7.5, 12, 6, 12, 3.5); g.bezierCurveTo(10, 5.5, 7, 4.5, 5, 6); g.fillStyle = bone; g.fill();
+    dot(10.5, -.2, .9, dark);
+    dot(1, -3, 3, "#fff", true); dot(1.8, -3, 1.5, ink); dot(2.3, -3.6, .5, "#fff");
+    g.strokeStyle = P.fire; g.globalAlpha = .9; g.lineWidth = 1.6; g.beginPath();
+    g.moveTo(12.5, 0 + sy); g.quadraticCurveTo(14, -3 + sy, 13, -6 + sy); g.stroke(); g.globalAlpha = 1;
+  }
+  g.restore();
+}
+
+function paintDragon(g, P, t) {
+  t = t || 0;
+  const body = "#35b08c", dark = "#1f7d66", belly = "#f3dc9c", mem = "#f08a5d", memDark = "#c9603c", ink = P.graphite;
+  const PI = Math.PI, w = 2 * PI * 3 * t, s = Math.sin(w);
+  g.save();
+  g.lineJoin = "round"; g.lineCap = "round"; g.strokeStyle = ink; g.lineWidth = 1.6;
+  const dir = a => [Math.cos(a), Math.sin(a)];
+  const add = (p, a, l) => { const d = dir(a); return [p[0] + d[0] * l, p[1] + d[1] * l]; };
+  const dotc = (x, y, r, c, line) => { g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = c; g.fill(); if (line) g.stroke(); };
+  const tri = (a, b, c, col) => { g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(c[0], c[1]); g.closePath(); g.fillStyle = col; g.fill(); g.stroke(); };
+  const bez = (p0, p1, p2, u) => { const m = 1 - u; return [m * m * p0[0] + 2 * m * u * p1[0] + u * u * p2[0], m * m * p0[1] + 2 * m * u * p1[1] + u * u * p2[1]]; };
+
+  // a wing: shoulder S, arm angle th, tips lag by `lag`; sc scales the length
+  function wing(S, th, lag, sc, col, bone, arm) {
+    const wrist = add(S, th, 25 * sc), a2 = th + lag;
+    const tips = [add(wrist, a2 + .22, 37 * sc), add(wrist, a2 - .3, 34 * sc), add(wrist, a2 - .82, 27 * sc)];
+    const root = [S[0] - 16, S[1] + 10];
+    g.beginPath(); g.moveTo(S[0], S[1]); g.lineTo(wrist[0], wrist[1]); g.lineTo(tips[0][0], tips[0][1]);
+    let prev = tips[0];
+    for (const tp of [tips[1], tips[2], root]) {
+      const mx = (prev[0] + tp[0]) / 2, my = (prev[1] + tp[1]) / 2;
+      g.quadraticCurveTo(mx + (wrist[0] - mx) * .3, my + (wrist[1] - my) * .3, tp[0], tp[1]); prev = tp;
+    }
+    g.closePath(); g.fillStyle = col; g.fill(); g.stroke();
+    g.lineWidth = 2.2; g.strokeStyle = ink; g.beginPath();
+    for (const tp of tips) { g.moveTo(wrist[0], wrist[1]); g.lineTo(tp[0], tp[1]); }
+    g.stroke();
+    g.lineWidth = 1; g.strokeStyle = bone; g.beginPath();
+    for (const tp of tips) { g.moveTo(wrist[0], wrist[1]); g.lineTo(tp[0], tp[1]); }
+    g.stroke();
+    g.lineWidth = 1.6; g.strokeStyle = ink;
+    g.lineWidth = 7.4; g.beginPath(); g.moveTo(S[0], S[1]); g.lineTo(wrist[0], wrist[1]); g.stroke();
+    g.lineWidth = 5; g.strokeStyle = arm; g.beginPath(); g.moveTo(S[0], S[1]); g.lineTo(wrist[0], wrist[1]); g.stroke();
+    g.strokeStyle = ink; g.lineWidth = 1.6;
+    const claw = add(wrist, th - 1.3, 7); // thumb claw
+    tri([wrist[0] - 1.5, wrist[1] - 1.5], claw, [wrist[0] + 1.8, wrist[1] + 1.5], "#f3dc9c");
+  }
+  const thOf = (ph) => { const sn = Math.sin(ph); return [-1.86 - 1.72 * (1 - sn) / 2, -.55 * Math.cos(ph)]; };
+
+  // far wing
+  { const [th, lag] = thOf(w - .5); wing([4, -8], th + .12, lag, .9, memDark, dark, dark); }
+
+  // tail: chain of discs, tapering, waving
+  const tail = [];
+  for (let i = 0; i <= 22; i++) {
+    const u = i / 22;
+    tail.push([-24 - 38 * u, 5 + 4 * u + 7 * u * Math.sin(u * 3.2 - t * 4.2)]);
+  }
+  const radAt = u => 8.5 - 6.3 * u;
+  for (const pass of [0, 1]) for (let i = 0; i <= 22; i++) {
+    const u = i / 22; dotc(tail[i][0], tail[i][1], radAt(u) + (pass ? 0 : 1.5), pass ? body : ink);
+  }
+  for (let i = 3; i <= 19; i += 3) { // tail spikes
+    const u = i / 22, p = tail[i], q = tail[i - 1], r = tail[i + 1], tx = r[0] - q[0], ty = r[1] - q[1], l = Math.hypot(tx, ty), nx = ty / l, ny = -tx / l, rr = radAt(u) - .5, h = 5.5 - 3 * u;
+    tri([p[0] - tx / l * 3 + nx * rr, p[1] - ty / l * 3 + ny * rr], [p[0] + nx * (rr + h) - tx / l * 2, p[1] + ny * (rr + h) - ty / l * 2], [p[0] + tx / l * 3 + nx * rr, p[1] + ty / l * 3 + ny * rr], P.hazard);
+  }
+  { // spade tip
+    const p = tail[22], q = tail[20], tx = p[0] - q[0], ty = p[1] - q[1], l = Math.hypot(tx, ty), ux = tx / l, uy = ty / l;
+    tri([p[0] + uy * 5 - ux, p[1] - ux * 5 - uy], [p[0] + ux * 8, p[1] + uy * 8], [p[0] - uy * 5 - ux, p[1] + ux * 5 - uy], P.fire);
+  }
+
+  // far legs
+  g.strokeStyle = ink; for (const [x0, x1] of [[10, 15], [-17, -22]]) {
+    g.lineWidth = 8.6; g.beginPath(); g.moveTo(x0 + 2, 9); g.lineTo(x1 + 4, 19); g.stroke();
+    g.lineWidth = 6; g.strokeStyle = dark; g.beginPath(); g.moveTo(x0 + 2, 9); g.lineTo(x1 + 4, 19); g.stroke(); g.strokeStyle = ink;
+  }
+
+  // neck (behind the body edge)
+  const n0 = [20, 0], n1 = [44, 0], n2 = [44, -18];
+  for (const pass of [0, 1]) for (let i = 0; i <= 14; i++) {
+    const p = bez(n0, n1, n2, i / 14), r = 10.5 - 3.2 * i / 14;
+    dotc(p[0], p[1], r + (pass ? 0 : 1.5), pass ? body : ink);
+  }
+  // belly stripes along the neck
+  g.lineWidth = 1.2; g.strokeStyle = belly; g.beginPath();
+  for (let i = 2; i <= 12; i += 2) { const p = bez(n0, n1, n2, i / 14), q = bez(n0, n1, n2, (i + .6) / 14), r = 10.5 - 3.2 * i / 14; const tx = q[0] - p[0], ty = q[1] - p[1], l = Math.hypot(tx, ty); g.moveTo(p[0] + ty / l * r * .9, p[1] - tx / l * r * .9 + 0); g.lineTo(p[0] + ty / l * (r * .35), p[1] - tx / l * (r * .35)); }
+  g.strokeStyle = ink; g.lineWidth = 1.6;
+
+  // body: flat-backed rounded shape
+  g.beginPath(); g.roundRect(-30, -10, 60, 28, [10, 10, 14, 14]); g.fillStyle = body; g.fill();
+  g.save(); g.clip(); g.fillStyle = belly; g.beginPath(); g.ellipse(2, 20, 34, 12, 0, 0, 7); g.fill(); g.restore();
+  g.beginPath(); g.roundRect(-30, -10, 60, 28, [10, 10, 14, 14]); g.stroke();
+  g.lineWidth = 1.1; g.strokeStyle = dark; g.beginPath(); for (const x of [-18, -8, 2, 12]) { g.moveTo(x, 10); g.quadraticCurveTo(x + 2, 12.5, x + 5, 10.5); } g.stroke();
+  g.strokeStyle = ink; g.lineWidth = 1.6;
+
+  // saddle blanket (the game seats the rider on top of it)
+  g.beginPath(); g.roundRect(-11, -11.5, 22, 4.5, 2); g.fillStyle = P.bad; g.fill(); g.stroke();
+
+  // near legs
+  for (const [x0, x1] of [[10, 15], [-17, -22]]) {
+    g.strokeStyle = ink; g.lineWidth = 9.2; g.beginPath(); g.moveTo(x0, 9); g.lineTo(x1 + 3, 19.5); g.stroke();
+    g.strokeStyle = body; g.lineWidth = 6.4; g.beginPath(); g.moveTo(x0, 9); g.lineTo(x1 + 3, 19.5); g.stroke();
+    g.strokeStyle = ink; g.lineWidth = 1.6;
+    g.beginPath(); g.ellipse(x1 + 6, 20.5, 5.4, 3, 0, 0, 7); g.fillStyle = body; g.fill(); g.stroke();
+    g.fillStyle = belly; for (const dx of [2.5, 5.5, 8]) { g.beginPath(); g.arc(x1 + dx + 1, 22.2, .9, 0, 7); g.fill(); }
+  }
+
+  // head
+  const hx = 50, hy = -22 + Math.sin(w) * .8;
+  g.beginPath(); g.moveTo(hx - 4, hy - 7); g.lineTo(hx - 12, hy - 18); g.lineTo(hx - 1, hy - 9); g.closePath(); g.fillStyle = belly; g.fill(); g.stroke(); // horn
+  tri([hx - 7, hy - 2], [hx - 18, hy - 6], [hx - 9, hy + 5], P.hazard); // ear fin
+  g.beginPath(); g.ellipse(hx + 11, hy + 3, 12, 7.2, .06, 0, 7); g.fillStyle = body; g.fill(); g.stroke(); // snout
+  g.beginPath(); g.ellipse(hx, hy, 10.5, 9.5, 0, 0, 7); g.fillStyle = body; g.fill(); g.stroke();
+  g.beginPath(); g.ellipse(hx + 11, hy + 3, 10, 5.6, .06, 0, 7); g.fillStyle = body; g.fill(); // hide seam
+  g.fillStyle = belly; g.beginPath(); g.ellipse(hx + 10, hy + 7.4, 10, 2.6, .06, 0, 7); g.fill(); // chin
+  g.strokeStyle = ink; g.lineWidth = 1.2; g.beginPath(); g.moveTo(hx + 22, hy + 5); g.quadraticCurveTo(hx + 14, hy + 9.2, hx + 6, hy + 6.2); g.stroke(); // smile
+  dotc(hx + 20, hy - .6, 1.2, ink); // nostril
+  dotc(hx + 3, hy + 4.5, 2.6, "#ff9d8a"); // cheek
+  g.globalAlpha = .55; g.fillStyle = "#ff9d8a"; g.beginPath(); g.arc(hx + 3, hy + 4.5, 2.6, 0, 7); g.fill(); g.globalAlpha = 1;
+  g.lineWidth = 1.5; g.strokeStyle = ink; dotc(hx + 6, hy - 3, 4.2, "#fff", true); dotc(hx + 7.2, hy - 2.6, 2.3, ink); dotc(hx + 7.9, hy - 3.5, .8, "#fff");
+
+  // near wing
+  { const [th, lag] = thOf(w); wing([-5, -8], th, lag, 1, mem, belly, body); }
+
+  g.restore();
+}
+
+// a magic item waiting on the slope: a gold halo with sparkles around its icon
+function drawMagicSpot(C, [x, y, kind], now) {
+  const pulse = 1 + .18 * Math.sin(now * 4 + x * .01);
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = C.gold; ctx.globalAlpha = .25; ctx.beginPath(); ctx.arc(0, 0, 24 * pulse, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = C.gold; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, 17, 0, 7); ctx.stroke();
+  for (let i = 0; i < 5; i++) { const an = now * 1.6 + i * Math.PI * .4, r = 26 + 3 * Math.sin(now * 5 + i); ctx.fillRect(Math.cos(an) * r - 2, Math.sin(an) * r - 2, 4, 4); }
+  paintMagic(ctx, palette(C, CHAR()), kind, now);
+  ctx.restore();
+}
+function paintMagic(g, P, kind, t) { // the art lives in paintMagicIcon; a plain token until it is there
+  if (typeof paintMagicIcon === "function") return paintMagicIcon(g, P, kind, t);
+  g.fillStyle = P.gold; g.beginPath(); g.arc(0, 0, 9, 0, 7); g.fill();
+}
+function drawDragonFlight(C, now) {
+  const u0 = Math.min(1, dragonT / DRAGON_T), u = u0 * u0 * (3 - 2 * u0), p = dragonAt(u), dir = Math.sign(p.dx);
+  const P = palette(C, CHAR());
+  ctx.save(); ctx.translate(p.x, p.y + (u0 >= 1 ? Math.sin(now * 3) * 4 : 0)); ctx.scale(dir, 1);
+  ctx.rotate(clamp(Math.atan2(p.dy, Math.abs(p.dx)), -.5, .5) * .6);
+  if (typeof paintDragon === "function") paintDragon(ctx, P, now);
+  else { ctx.fillStyle = "#2f9e6e"; ctx.beginPath(); ctx.ellipse(0, 0, 55, 16, 0, 0, 7); ctx.fill(); }
+  ctx.save(); ctx.translate(-16, -21); ctx.scale(.85, .85); paintRider(ctx, P, CHAR(), VEH(), now); ctx.restore();
+  ctx.restore();
 }
 // one part between a and b in the current transform: a body part as an outlined thick stroke, or a vehicle piece
 function paintPart(g, P, p, ax, ay, bx, by, t = 0) {
@@ -1098,8 +1416,14 @@ function paintRider(g, P, ch, vh, t = 0, helmet = false) {
 function drawSkier(C, now = 0) {
   const a = car.w[0], f = basis();
   ctx.save(); ctx.translate(a.x, a.y); ctx.transform(f.ux, f.uy, -f.nx, -f.ny, 0, 0); // local: x forward, y down
-  if (fx?.grace > 0 && Math.floor(now * 12) % 2) ctx.globalAlpha = .35; // just lost the helmet
-  paintRider(ctx, palette(C, CHAR()), CHAR(), VEH(), now, fx?.shield > 0);
+  if (fx?.grace > 0 && Math.floor(now * 12) % 2) ctx.globalAlpha = .35; // magic just took a hit
+  const act = fx ? activeMagic() : [], P = palette(C, CHAR());
+  paintRider(ctx, P, CHAR(), VEH(), now, fx?.shield > 0 && act.includes("capacete"));
+  if (fx?.shield > 0 && act.includes("bolha")) { // the bubble wraps the rider
+    const [mx, my] = VEH().mid;
+    ctx.fillStyle = P.glass; ctx.globalAlpha *= .3; ctx.beginPath(); ctx.arc(mx, -my, 40, 0, 7); ctx.fill();
+    ctx.globalAlpha /= .3; ctx.strokeStyle = P.ice; ctx.lineWidth = 2; ctx.stroke();
+  }
   ctx.restore();
 }
 function drawRag(C) {
@@ -1114,6 +1438,7 @@ function loop(t) {
   const dt = Math.min((t - last) / 1000, 1 / 30); last = t;
   if (state === "run") update(dt);
   else if (state === "edit") tHaz += dt;
+  else if (state === "dragon" && (dragonT += dt) >= DRAGON_T) end("win", "O dragão te levou!", "Voou direto até a chegada, sem um arranhão.", true, true);
   if (rag.length) stepRag(dt);
   if (drops.length) stepDrops(dt);
   for (const p of parts) { p.vy += G * .6 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += dt * 8; p.life -= dt * .7; }
