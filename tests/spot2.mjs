@@ -59,16 +59,17 @@ const out = await page.evaluate(({ sols, magic, levels, iters, tries, dmin, hz, 
   const trail = (i, wp) => { // trajectory points of a run (every 0.1 s) and whether it won
     lvl = i; const st = processStroke([levelFor(i).start.slice(2), ...wp], joinAt(levelFor(i).start.slice(2)).dir); drawings[i] = st ? [st] : [];
     rebuild(); spawn(); arm(); tRun = 0; tHaz = 0; best = Infinity; stale = 0; state = "run"; __reason = "";
-    const pts = []; let n = 0;
-    while (state === "run" && n++ < 45 / STEP) { update(STEP); if (n % 12 === 0) { const [cx, cy] = local(...VEH().mid); pts.push([cx, cy]); } }
-    const r = { win: state === "win", pts }; state = "edit"; drawings[i] = []; return r;
+    const pts = [], body = []; let n = 0;
+    while (state === "run" && n++ < 45 / STEP) { update(STEP); if (n % 12 === 0) { const [cx, cy] = local(...VEH().mid); pts.push([cx, cy]); for (const q of VEH().probes.map(p => local(...p))) body.push(q); for (const w of car.w) body.push([w.x, w.y]); } }
+    const r = { win: state === "win", pts, body }; state = "edit"; drawings[i] = []; return r;
   };
   const results = [];
   for (const n of levels) {
     const i = n - 1, kind = MAGIC_SPOTS[i][2], old = MAGIC_SPOTS[i].slice(0, 2);
     setLand(false); rider.vh = 0; toughen(); for (const k in levelCache) delete levelCache[k];
-    const T = []; for (let v = 0; v < 6; v++) { const w = sols[`${v},0,${n}`]; if (!w) continue; rider.vh = v; toughen(); T.push(...trail(i, w).pts); }
-    rider.vh = 0; toughen(); const gl = levelFor(i).goal; T.push(...trail(i, [[gl[0], gl[1]]]).pts);
+    const T = []; for (let v = 0; v < 6; v++) { const w = sols[`${v},0,${n}`]; if (!w) continue; rider.vh = v; toughen(); T.push(...trail(i, w).body); }
+    setLand(true); for (let v = 0; v < 6; v++) { const w = sols[`${v},1,${n}`]; if (!w) continue; rider.vh = v; toughen(); T.push(...trail(i, w).body.map(([x, y]) => [x * .7, y / .7])); } setLand(false); // sideways ordinary tracks, in portrait coordinates
+    rider.vh = 0; toughen(); const gl = levelFor(i).goal; T.push(...trail(i, [[gl[0], gl[1]]]).body);
     const far = (x, y) => Math.min(...T.map(p => Math.hypot(p[0] - x, p[1] - y)));
     let rng = 4242 + n; const rnd = () => (rng = (rng * 1103515245 + 12345) % 2147483648) / 2147483648;
     const g = () => { let u = 0; for (let q = 0; q < 6; q++) u += rnd(); return (u - 3) / 1.2; };
@@ -84,14 +85,14 @@ const out = await page.evaluate(({ sols, magic, levels, iters, tries, dmin, hz, 
     }
     found.sort((a, b) => a.d - b.d); // the closest-to-ordinary spots that still need a detour first
     for (let a = found.length - 1; a > 0; a--) if (found.slice(0, a).some(b => Math.hypot(b.spot[0] - found[a].spot[0], b.spot[1] - found[a].spot[1]) < 25)) found.splice(a, 1);
-    let res = null, tried = 0; const why = { near: 0, port: 0, land: 0 };
+    let res = null, tried = 0; const why = { near: 0, port: 0, land: 0, by: {} };
     for (const f of found) {
       if (tried >= 60) break; tried++;
       MAGIC_SPOTS[i] = [f.spot[0], f.spot[1], kind]; for (const k in levelCache) delete levelCache[k];
       let bad = false;
       for (const L of [0, 1]) { setLand(!!L);
-        for (let v = 0; v < 6 && !bad; v++) { rider.vh = v; toughen(); const w = sols[`${v},${L},${n}`]; if (w) { const r = run(i, w); if (r.magic || r.dmin < NEAR) bad = true; } }
-        rider.vh = 0; toughen(); const q = levelFor(i).goal; if (!bad) { const r = run(i, [[q[0], q[1]]]); if (r.magic || r.dmin < NEAR) bad = true; } }
+        for (let v = 0; v < 6 && !bad; v++) { rider.vh = v; toughen(); const w = sols[`${v},${L},${n}`]; if (w) { const r = run(i, w); if (r.magic || r.dmin < NEAR) { bad = true; const k = `v${v}${L ? 'L' : 'P'}`; why.by[k] = (why.by[k] || 0) + 1; } } }
+        rider.vh = 0; toughen(); const q = levelFor(i).goal; if (!bad) { const r = run(i, [[q[0], q[1]]]); if (r.magic || r.dmin < NEAR) { bad = true; const k = `naive${L ? 'L' : 'P'}`; why.by[k] = (why.by[k] || 0) + 1; } } }
       if (bad) { why.near++; continue; }
       setLand(false); rider.vh = 0; toughen();
       const fitP = w => { let s = 0; for (const v of [w, wob(w, 7), wob(w, 99)]) { const r = run(i, v); if (!(r.magic && r.win)) return s + (r.magic ? 1.2 : 0.5); s++; } return 3; };

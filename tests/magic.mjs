@@ -20,6 +20,7 @@ const res = await page.evaluate(({ proofs, sols, l0, l1, solve, iters }) => {
   const out = [];
   for (let n = l0; n <= l1; n++) {
     const i = n - 1, why = [], P = proofs[n] || {};
+    if (!MAGIC_SPOTS[i]) { out.push({ n, ok: true, why: [], proof: P, none: true }); continue; } // no item on this level (listed in docs/LEVEL_DESIGN_PLAN.md)
     for (const L of [0, 1]) {
       rider.vh = 0; toughen(); setLand(!!L);
       const key = L ? "land" : "port", mg = levelFor(i).magic;
@@ -44,7 +45,7 @@ const res = await page.evaluate(({ proofs, sols, l0, l1, solve, iters }) => {
   return out;
 }, { proofs, sols, l0, l1, solve: process.argv.includes("--solve"), iters: +arg("iters", 3000) });
 const bad = res.filter(r => !r.ok);
-console.log(`itens mágicos: ${res.length - bad.length}/${res.length} ok`);
+console.log(`itens mágicos: ${res.length - bad.length}/${res.length} ok (${res.filter(r => r.none).length} fases sem item: ${res.filter(r => r.none).map(r => r.n).join(", ") || "-"})`);
 for (const r of bad) console.log(`  fase ${r.n}: ${r.why.join("; ")}`);
 const outF = arg("out"); if (outF) fs.writeFileSync(outF, JSON.stringify(Object.fromEntries(res.map(r => [r.n, r.proof]))));
 if (process.argv.includes("--write")) { const cur = JSON.parse(fs.readFileSync(file, "utf8")); for (const r of res) cur[r.n] = r.proof; fs.writeFileSync(file, JSON.stringify(cur)); }
