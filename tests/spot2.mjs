@@ -73,11 +73,13 @@ const out = await page.evaluate(({ sols, magic, levels, iters, tries, dmin, hz, 
     let rng = 4242 + n; const rnd = () => (rng = (rng * 1103515245 + 12345) % 2147483648) / 2147483648;
     const g = () => { let u = 0; for (let q = 0; q < 6; q++) u += rnd(); return (u - 3) / 1.2; };
     const base = sols[`0,0,${n}`].map(inside), found = []; let maxd = 0;
-    for (let k = 0; k < tries && found.length < 80; k++) {
-      let wp = base.map(q => [...q]); const sg = 20 + rnd() * 60;
-      if (rnd() < .4) { const j = Math.floor(rnd() * wp.length); wp.splice(j, 0, inside([wp[j][0] + g() * 80, wp[j][1] + g() * 80])); }
-      wp = wp.map((q, j) => j === wp.length - 1 || rnd() < .4 ? q : inside([q[0] + g() * sg, q[1] + g() * sg]));
+    let cur = base.map(q => [...q]);
+    for (let k = 0; k < tries && found.length < 80; k++) { // random walk over winning tracks: each win is the next starting point
+      let wp = cur.map(q => [...q]); const sg = 8 + rnd() * 30;
+      if (rnd() < .08) { const j = Math.floor(rnd() * wp.length); wp.splice(j, 0, inside([wp[j][0] + g() * 60, wp[j][1] + g() * 60])); }
+      wp = wp.map((q, j) => j === wp.length - 1 || rnd() < .5 ? q : inside([q[0] + g() * sg, q[1] + g() * sg]));
       const t = trail(i, wp); if (!t.win) continue;
+      cur = wp;
       for (const [x, y] of t.pts) { const d = far(x, y); maxd = Math.max(maxd, d); if (d >= DMIN && clear(x, y, n)) found.push({ wp, spot: [Math.round(x), Math.round(y)], d }); }
     }
     found.sort((a, b) => a.d - b.d); // the closest-to-ordinary spots that still need a detour first
