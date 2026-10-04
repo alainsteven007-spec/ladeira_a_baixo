@@ -43,7 +43,7 @@ Consequência: um loop desenhado à mão se comporta como o círculo ideal. A ve
 Ver `docs/VEHICLES.md`. Parâmetros: `roll` (atrito na neve), `drag` (arrasto do ar), `tough` (pancada que aguenta), `thrust` (foguete), `spin` (quão rápido para de girar no ar) e `bounce` (quanto devolve num pouso forte).
 
 ## Chegada
-O pé *ou* o corpo dentro do círculo (raio 48 px) vence. A bandeira fica no centro do círculo: mirar na bandeira sempre funciona.
+O centro do corpo dentro do círculo (raio 54 px) vence. A bandeira fica no centro do círculo: mirar na bandeira sempre funciona.
 
 ## Regra de ouro
 Nenhum parâmetro físico varia com tentativas, derrotas, dicas ou itens (itens só cancelam uma perda, `hurt()`).

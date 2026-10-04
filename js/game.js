@@ -21,9 +21,9 @@ function update(dt) {
   pickUp(probes);
   if (car.w.some(w => w.y > H + 80 || w.x < -80 || w.x > W + 80)) return end("crash", "Despencou", "{quem} saiu da pista e caiu montanha abaixo.");
   vNow = (Math.hypot(a.vx, a.vy) + Math.hypot(b.vx, b.vy)) / 2;
-  // the finish counts as soon as any part of the rider is inside the circle
+  // the finish counts when the rider's body centre reaches the flag's circle (it is a target, not a net)
   const [cx, cy] = local(...VEH().mid), [gx, gy] = L().goal, dist = Math.hypot(cx - gx, cy - gy);
-  if (dist < GOAL_R || probes.concat(car.w.map(w => [w.x, w.y])).some(([px, py]) => Math.hypot(px - gx, py - gy) < GOAL_R)) return end("win", "Chegou inteiro!", `Levou ${sec(tRun)} e cruzou a chegada a ${ms(vNow)}.`);
+  if (dist < GOAL_R) return end("win", "Chegou inteiro!", `Levou ${sec(tRun)} e cruzou a chegada a ${ms(vNow)}.`);
   if (dist < best - 2) { best = dist; stale = 0; } else stale += dt; // stopped or rocking in a valley = no new closest approach
   if (stale > 3.5) return end("crash", "Não chegou lá", "{quem} perdeu o embalo. Só a gravidade empurra: a chegada precisa ficar mais baixa que o ponto mais alto do caminho.", false);
   if (tRun > T_MAX) return end("crash", "Tempo esgotado", `Passaram ${T_MAX} s e {quem} não chegou.`, false);
