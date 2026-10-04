@@ -11,9 +11,9 @@ const sols = JSON.parse(fs.readFileSync(path.join(root, "tests/data/solutions.js
 const magic = JSON.parse(fs.readFileSync(path.join(root, "tests/data/magic.json"), "utf8"));
 const levels = arg("levels", "1-50").split(",").flatMap(r => { const [a, b = a] = r.split("-").map(Number); return Array.from({ length: b - a + 1 }, (_, k) => a + k); });
 const { browser, page, errors } = await open();
-const out = await page.evaluate(({ sols, magic, levels, iters, tries, dmin, hz, hzm }) => {
+const out = await page.evaluate(({ sols, magic, levels, iters, tries, dmin, hz, hzm, near }) => {
   bag = []; earned = new Set();
-  const NEAR = 38, DMIN = dmin;
+  const NEAR = near, DMIN = dmin;
   const run = (i, wp, spot) => {
     lvl = i; const st = processStroke([levelFor(i).start.slice(2), ...wp], joinAt(levelFor(i).start.slice(2)).dir); drawings[i] = st ? [st] : [];
     rebuild(); spawn(); arm(); tRun = 0; tHaz = 0; best = Infinity; stale = 0; state = "run"; __reason = "";
@@ -111,7 +111,7 @@ const out = await page.evaluate(({ sols, magic, levels, iters, tries, dmin, hz, 
     console.log(`fase ${n} ${kind}: ${res ? `MOVIDO ${JSON.stringify(old)} -> ${JSON.stringify(res.spot)} (a ${res.d} px das pistas comuns)` : "SEM SOLUÇÃO"} (candidatos ${found.length}, testados ${tried})`);
   }
   return results;
-}, { sols, magic, levels, iters: +arg("iters", 400), tries: +arg("tries", 600), dmin: +arg("dmin", 50), hz: +arg("hz", 45), hzm: +arg("hzm", 45) });
+}, { sols, magic, levels, iters: +arg("iters", 400), tries: +arg("tries", 600), dmin: +arg("dmin", 50), hz: +arg("hz", 45), hzm: +arg("hzm", 45), near: +arg("near", 38) });
 for (const r of out) console.log(`fase ${r.n} ${r.kind}: ${r.found ? `MOVIDO ${JSON.stringify(r.old)} -> ${JSON.stringify(r.found.spot)} (a ${r.found.d} px das pistas comuns)` : "SEM SOLUÇÃO"} (candidatos ${r.cands}, testados ${r.tried}, maior desvio de uma pista vencedora ${r.maxd} px, descartes ${JSON.stringify(r.why)})`);
 const o = arg("out"); if (o) fs.writeFileSync(o, JSON.stringify(out));
 if (errors.length) console.log("JS errors", errors);
