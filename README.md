@@ -51,7 +51,7 @@ No seletor, as fases estão agrupadas por modalidade. Da 37 à 50 entram três m
 - **Lento (caracol):** freia por 3 s. Às vezes é armadilha, às vezes ajuda a acertar o tempo.
 - **Gelo (floco de neve):** congela por 3 s tudo o que se move.
 
-**Itens mágicos:** cada fase esconde um, num lugar quase impossível. Só fica com ele quem encosta no item **e chega vivo** ao fim da fase. As fases que ainda têm item aparecem com ✦ no menu, e as que já deram o item aparecem com ★.
+**Itens mágicos:** quase toda fase esconde um, num lugar quase impossível (as fases 32, 33 e 36 ficam sem item até serem refeitas, porque só têm um corredor para vencer). Só fica com ele quem encosta no item **e chega vivo** ao fim da fase. As fases que ainda têm item aparecem com ✦ no menu, e as que já deram o item aparecem com ★.
 
 - **Bolha:** aguenta 1 batida.
 - **Capacete:** aguenta até 3 batidas.
@@ -75,4 +75,4 @@ O botão **⟳ Deitar** troca para a montanha larga, para jogar com o celular de
 
 ## Rodar
 
-É um arquivo só: abra o `index.html` no navegador. Para jogar no celular, ative o GitHub Pages neste repositório (Settings → Pages → branch `main`, pasta `/`).
+Sem instalação e sem build: abra o `index.html` no navegador (ele carrega `css/` e `js/`). Testes: `node tests/physics.mjs`, `tests/solve.mjs`, `tests/magic.mjs`, `tests/live.mjs` (precisam do Playwright). A física é determinística: o mesmo desenho dá o mesmo resultado em qualquer aparelho (veja `docs/PHYSICS.md`). Para jogar no celular, ative o GitHub Pages neste repositório (Settings → Pages → branch `main`, pasta `/`).
